@@ -172,7 +172,7 @@ export const AuditLogsAdmin: React.FC = () => {
 
         <div className="text-right font-mono text-xs text-slate-400 shrink-0">
           <span className="text-slate-500">Total Audited Events:</span>{' '}
-          <span className="text-white font-bold">{logs.length} entries</span>
+          <span className="text-white font-bold">{logs?.length || 0} entries</span>
         </div>
       </div>
 
@@ -248,14 +248,14 @@ export const AuditLogsAdmin: React.FC = () => {
                     Loading cryptographic audit ledger...
                   </td>
                 </tr>
-              ) : filteredLogs.length === 0 ? (
+              ) : (!filteredLogs || filteredLogs.length === 0) ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-500 font-sans">
                     No matching audit records found.
                   </td>
                 </tr>
               ) : (
-                filteredLogs.map((log) => (
+                (filteredLogs || []).map((log) => (
                   <tr key={log.id} className="hover:bg-slate-800/40 transition">
                     <td className="px-5 py-3.5 text-slate-400 text-[11px] whitespace-nowrap">
                       {new Date(log.createdAt).toLocaleString()}
