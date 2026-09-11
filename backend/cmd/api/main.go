@@ -162,6 +162,7 @@ func main() {
 			r.Get("/duplicates/{id}", dedupeH.GetByID)
 			r.Post("/datasets/{id}/deduplicate", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(dedupeH.RunDeduplication)).ServeHTTP)
 			r.Post("/duplicates/{id}/resolve", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(dedupeH.Resolve)).ServeHTTP)
+			r.Post("/duplicates/{id}/unresolve", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(dedupeH.Unresolve)).ServeHTTP)
 			r.Post("/duplicates/bulk-resolve", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin)(http.HandlerFunc(dedupeH.BulkResolve)).ServeHTTP)
 
 			// Phase 5: Healthcare Analytics & OLAP Engine

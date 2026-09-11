@@ -44,10 +44,14 @@ func (s *DedupeService) RunDeduplication(datasetID, orgID string, dedupeConfig d
 		return nil, nil, fmt.Errorf("failed to load dataset file: %w", err)
 	}
 
-	// 2. Parse data rows
-	parseRes, err := ingest.ParseDatasetContent(dataset.FileType, data)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse dataset rows: %w", err)
+	// 2. Parse all data rows (supporting full files rather than just 20 preview rows)
+	allRows, err := ingest.ParseDatasetAllRows(dataset.FileType, data)
+	if err != nil || len(allRows) == 0 {
+		parseRes, parseErr := ingest.ParseDatasetContent(dataset.FileType, data)
+		if parseErr != nil {
+			return nil, nil, fmt.Errorf("failed to parse dataset rows: %w", parseErr)
+		}
+		allRows = parseRes.Preview
 	}
 
 	// 3. Setup default configuration if not provided
@@ -58,22 +62,34 @@ func (s *DedupeService) RunDeduplication(datasetID, orgID string, dedupeConfig d
 		dedupeConfig.Weights = dedupe.DefaultDemographicWeights()
 	}
 
-	// 4. Generate candidate duplicate pairs
-	pairs := dedupe.GenerateCandidatePairs(parseRes.Preview, datasetID, orgID, dedupeConfig)
+	// 4. Fetch existing resolved pairs so we preserve prior user decisions
+	resolvedMap, _ := s.repo.GetResolvedPairsByDataset(datasetID)
 
-	// If fewer than 20 rows in preview but totalRecords is larger, we still have high-quality candidates
-	log.Printf("Generated %d duplicate candidate pairs for dataset %s (threshold: %.2f)", len(pairs), datasetID, dedupeConfig.ConfidenceThreshold)
+	// 5. Generate candidate duplicate pairs
+	candidatePairs := dedupe.GenerateCandidatePairs(allRows, datasetID, orgID, dedupeConfig)
 
-	// 5. Clean prior duplicates for this dataset and save new candidates
-	_ = s.repo.DeleteDuplicatePairsByDataset(datasetID)
-	if len(pairs) > 0 {
-		if err := s.repo.SaveDuplicatePairs(pairs); err != nil {
+	// Filter candidate pairs to keep only new pending pairs that haven't been resolved yet
+	var newPendingPairs []domain.DuplicatePair
+	for _, p := range candidatePairs {
+		key := fmt.Sprintf("%s:%s", p.RecordAID, p.RecordBID)
+		if _, alreadyResolved := resolvedMap[key]; !alreadyResolved {
+			newPendingPairs = append(newPendingPairs, p)
+		}
+	}
+
+	log.Printf("Generated %d duplicate candidate pairs (new pending: %d, preserved resolved: %d) for dataset %s (threshold: %.2f)",
+		len(candidatePairs), len(newPendingPairs), len(resolvedMap)/2, datasetID, dedupeConfig.ConfidenceThreshold)
+
+	// 6. Clean ONLY prior PENDING duplicates for this dataset and save new candidates
+	_ = s.repo.DeletePendingDuplicatePairsByDataset(datasetID)
+	if len(newPendingPairs) > 0 {
+		if err := s.repo.SaveDuplicatePairs(newPendingPairs); err != nil {
 			log.Printf("Warning: failed to persist duplicate pairs: %v", err)
 		}
 	}
 
 	stats, _ := s.repo.GetDeduplicationStats(orgID, datasetID)
-	return pairs, stats, nil
+	return candidatePairs, stats, nil
 }
 
 // ListDuplicatePairs retrieves candidate pairs with filtering and search
@@ -173,6 +189,36 @@ func (s *DedupeService) ResolveDuplicate(pairID, orgID, userID, userEmail, ipAdd
 		Action:         fmt.Sprintf("DUPLICATE_%s", req.Action),
 		Resource:       fmt.Sprintf("duplicate_pair:%s", pairID),
 		Details:        auditDetails,
+		IPAddress:      ipAddress,
+		CreatedAt:      time.Now(),
+	})
+
+	return s.repo.GetDuplicatePairByID(pairID)
+}
+
+// UnresolveDuplicate resets a duplicate pair back to PENDING status
+func (s *DedupeService) UnresolveDuplicate(pairID, orgID, userID, userEmail, ipAddress string) (*domain.DuplicatePair, error) {
+	pair, err := s.repo.GetDuplicatePairByID(pairID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve pair: %w", err)
+	}
+	if pair == nil {
+		return nil, fmt.Errorf("duplicate pair not found")
+	}
+
+	if err := s.repo.UnresolveDuplicatePair(pairID, orgID); err != nil {
+		return nil, fmt.Errorf("failed to re-open duplicate pair: %w", err)
+	}
+
+	// Audit Log
+	_ = s.repo.CreateAuditLog(&domain.AuditLog{
+		ID:             fmt.Sprintf("aud-%s", uuid.New().String()[:12]),
+		OrganizationID: orgID,
+		UserID:         userID,
+		UserEmail:      userEmail,
+		Action:         "DUPLICATE_REOPENED",
+		Resource:       fmt.Sprintf("duplicate_pair:%s", pairID),
+		Details:        fmt.Sprintf("Reopened duplicate pair %s from status %s to PENDING", pairID, pair.Status),
 		IPAddress:      ipAddress,
 		CreatedAt:      time.Now(),
 	})

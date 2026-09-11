@@ -48,6 +48,82 @@ func ParseDatasetContent(fileType string, data []byte) (*ParseResult, error) {
 	}
 }
 
+// ParseDatasetAllRows parses all records in raw bytes into slice of map[string]interface{} for full deduplication and profiling
+func ParseDatasetAllRows(fileType string, data []byte) ([]map[string]interface{}, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("dataset content is empty")
+	}
+	switch strings.ToLower(fileType) {
+	case "json":
+		var records []map[string]interface{}
+		if err := json.Unmarshal(data, &records); err == nil {
+			return records, nil
+		}
+		var single map[string]interface{}
+		if err := json.Unmarshal(data, &single); err == nil {
+			return []map[string]interface{}{single}, nil
+		}
+		return nil, fmt.Errorf("invalid json content")
+	case "ndjson", "jsonl":
+		lines := bytes.Split(data, []byte("\n"))
+		var records []map[string]interface{}
+		for _, line := range lines {
+			trimmed := bytes.TrimSpace(line)
+			if len(trimmed) == 0 {
+				continue
+			}
+			var record map[string]interface{}
+			if err := json.Unmarshal(trimmed, &record); err == nil {
+				records = append(records, record)
+			}
+		}
+		return records, nil
+	default:
+		// CSV
+		reader := csv.NewReader(bytes.NewReader(data))
+		reader.LazyQuotes = true
+		reader.TrimLeadingSpace = true
+
+		firstLine := string(bytes.Split(data, []byte("\n"))[0])
+		if strings.Count(firstLine, "\t") > strings.Count(firstLine, ",") {
+			reader.Comma = '\t'
+		} else if strings.Count(firstLine, ";") > strings.Count(firstLine, ",") {
+			reader.Comma = ';'
+		}
+
+		headers, err := reader.Read()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read CSV headers: %w", err)
+		}
+
+		for i, h := range headers {
+			headers[i] = strings.TrimSpace(h)
+			if headers[i] == "" {
+				headers[i] = fmt.Sprintf("column_%d", i+1)
+			}
+		}
+
+		var records []map[string]interface{}
+		for {
+			row, err := reader.Read()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				continue
+			}
+			if len(row) == len(headers) {
+				m := make(map[string]interface{}, len(headers))
+				for i, h := range headers {
+					m[h] = strings.TrimSpace(row[i])
+				}
+				records = append(records, m)
+			}
+		}
+		return records, nil
+	}
+}
+
 func parseCSV(data []byte) (*ParseResult, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("dataset content is empty")

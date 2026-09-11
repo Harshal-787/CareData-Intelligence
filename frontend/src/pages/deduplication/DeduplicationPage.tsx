@@ -17,6 +17,10 @@ import {
   ChevronDown,
   UserCheck,
   SlidersHorizontal,
+  Undo2,
+  Crown,
+  Info,
+  ShieldAlert,
 } from "lucide-react";
 import { fetchDatasets, generateSampleDataset } from "../../api/datasets";
 import {
@@ -24,6 +28,7 @@ import {
   fetchDuplicatePairs,
   runDeduplicationAudit,
   resolveDuplicatePair,
+  unresolveDuplicatePair,
   bulkResolveDuplicates,
   fetchMPIRecords,
 } from "../../api/dedupeApi";
@@ -38,11 +43,13 @@ import {
 export const DeduplicationPage: React.FC = () => {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [selectedDatasetId, setSelectedDatasetId] = useState<string>("");
+  const [datasetsLoaded, setDatasetsLoaded] = useState<boolean>(false);
 
   const [activeTab, setActiveTab] = useState<"queue" | "mpi" | "tuning">("queue");
   const [statusFilter, setStatusFilter] = useState<string>("PENDING");
   const [confidenceTier, setConfidenceTier] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [mpiSearchQuery, setMpiSearchQuery] = useState<string>("");
 
   const [pairs, setPairs] = useState<DuplicatePair[]>([]);
   const [totalPairs, setTotalPairs] = useState<number>(0);
@@ -55,6 +62,10 @@ export const DeduplicationPage: React.FC = () => {
   const [generatingSample, setGeneratingSample] = useState<boolean>(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [bulkResolving, setBulkResolving] = useState<boolean>(false);
+  const [notification, setNotification] = useState<{
+    type: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
 
   // Merge / Golden Record Modal State
   const [activeModalPair, setActiveModalPair] = useState<DuplicatePair | null>(null);
@@ -76,7 +87,15 @@ export const DeduplicationPage: React.FC = () => {
     emailWeight: 0.05,
   });
 
-  // Load Initial Datasets
+  // Auto-clear notifications after 6 seconds
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
+  // Load Initial Datasets once
   useEffect(() => {
     const init = async () => {
       try {
@@ -87,23 +106,23 @@ export const DeduplicationPage: React.FC = () => {
         setDatasets(readyDs);
         if (readyDs.length > 0) {
           setSelectedDatasetId(readyDs[0].id);
-        } else {
-          // If no datasets exist yet, load global dedupe data safely
-          await loadDedupeData("");
         }
       } catch (err) {
         console.error("Failed to load datasets:", err);
       } finally {
+        setDatasetsLoaded(true);
         setLoading(false);
       }
     };
     init();
   }, []);
 
-  // Reload data when dataset or filters change
+  // Reload data when dataset or filters change (only after datasets are loaded)
   useEffect(() => {
-    loadDedupeData(selectedDatasetId);
-  }, [selectedDatasetId, statusFilter, confidenceTier, searchQuery, activeTab]);
+    if (datasetsLoaded) {
+      loadDedupeData(selectedDatasetId);
+    }
+  }, [selectedDatasetId, statusFilter, confidenceTier, searchQuery, activeTab, datasetsLoaded]);
 
   const loadDedupeData = async (datasetId?: string) => {
     const targetDsId = datasetId !== undefined ? datasetId : selectedDatasetId;
@@ -163,9 +182,17 @@ export const DeduplicationPage: React.FC = () => {
       const readyDs = safeList.filter((d) => d && d.status === "READY");
       setDatasets(readyDs);
       setSelectedDatasetId(newDs.id);
+      setNotification({
+        type: "success",
+        message: `Sample clinical dataset "${newDs.name}" generated with duplicate candidate pairs.`,
+      });
       await loadDedupeData(newDs.id);
     } catch (err) {
       console.error("Failed to generate sample demographics dataset:", err);
+      setNotification({
+        type: "error",
+        message: "Failed to generate demo dataset.",
+      });
     } finally {
       setGeneratingSample(false);
     }
@@ -180,13 +207,18 @@ export const DeduplicationPage: React.FC = () => {
         blockingStrategy,
         weights,
       });
-      setStats(res.stats);
-      setPairs(res.pairs);
-      setTotalPairs(res.total);
+      setNotification({
+        type: "success",
+        message: `Deduplication complete: ${res.total} duplicate pairs identified (${res.stats?.pendingReviewCount || 0} pending review, ${res.stats?.mergedCount || 0} preserved merged).`,
+      });
+      await loadDedupeData(selectedDatasetId);
       setActiveTab("queue");
-      setStatusFilter("PENDING");
     } catch (err) {
       console.error("Deduplication analysis failed:", err);
+      setNotification({
+        type: "error",
+        message: "Deduplication analysis failed. Check backend connection.",
+      });
     } finally {
       setRunningDedupe(false);
     }
@@ -200,9 +232,17 @@ export const DeduplicationPage: React.FC = () => {
         survivorRecordId: pair.recordAId,
         resolutionNotes: "Quick merged via automated survivor priority (Record A primary)",
       });
+      setNotification({
+        type: "success",
+        message: `Merged pair ${pair.id}: Record A (${pair.recordAId}) preserved as primary survivor in Master Patient Index.`,
+      });
       await loadDedupeData();
     } catch (err) {
       console.error("Merge failed:", err);
+      setNotification({
+        type: "error",
+        message: "Merge operation failed.",
+      });
     } finally {
       setResolvingId(null);
     }
@@ -215,9 +255,37 @@ export const DeduplicationPage: React.FC = () => {
         action: "DISTINCT",
         resolutionNotes: "Marked as distinct patient entity (False Positive)",
       });
+      setNotification({
+        type: "info",
+        message: `Candidate pair ${pair.id} verified as distinct individuals (False Positive).`,
+      });
       await loadDedupeData();
     } catch (err) {
       console.error("Mark distinct failed:", err);
+      setNotification({
+        type: "error",
+        message: "Mark distinct failed.",
+      });
+    } finally {
+      setResolvingId(null);
+    }
+  };
+
+  const handleUnresolvePair = async (pair: DuplicatePair) => {
+    try {
+      setResolvingId(pair.id);
+      await unresolveDuplicatePair(pair.id);
+      setNotification({
+        type: "info",
+        message: `Re-opened pair ${pair.id} back to Pending Review queue.`,
+      });
+      await loadDedupeData();
+    } catch (err) {
+      console.error("Unresolve failed:", err);
+      setNotification({
+        type: "error",
+        message: "Failed to re-open candidate pair.",
+      });
     } finally {
       setResolvingId(null);
     }
@@ -229,14 +297,22 @@ export const DeduplicationPage: React.FC = () => {
     }
     try {
       setBulkResolving(true);
-      await bulkResolveDuplicates({
+      const res = await bulkResolveDuplicates({
         minConfidence: 0.90,
         action: "MERGED",
         resolutionNotes: "Bulk auto-merge for high confidence demographic matches (≥90%)",
       });
+      setNotification({
+        type: "success",
+        message: `Bulk resolved ${res.resolvedCount || 0} high-confidence candidate pairs into Master Patient Index.`,
+      });
       await loadDedupeData();
     } catch (err) {
       console.error("Bulk merge failed:", err);
+      setNotification({
+        type: "error",
+        message: "Bulk merge operation failed.",
+      });
     } finally {
       setBulkResolving(false);
     }
@@ -311,8 +387,44 @@ export const DeduplicationPage: React.FC = () => {
     return "bg-rose-500/10 text-rose-400 border-rose-500/20";
   };
 
+  // Filter MPI Records by search query
+  const filteredMpiRecords = mpiRecords.filter((mpi) => {
+    if (!mpiSearchQuery) return true;
+    const q = mpiSearchQuery.toLowerCase();
+    const mpiId = (mpi.masterPatientId || "").toLowerCase();
+    const dataStr = JSON.stringify(mpi.consolidatedData || {}).toLowerCase();
+    const createdBy = (mpi.createdBy || "").toLowerCase();
+    return mpiId.includes(q) || dataStr.includes(q) || createdBy.includes(q);
+  });
+
   return (
     <div className="space-y-8 animate-fadeIn text-slate-100 pb-16">
+      {/* Notification Toast Banner */}
+      {notification && (
+        <div
+          className={`p-4 rounded-xl border flex items-center justify-between gap-3 shadow-lg transition-all animate-fadeIn ${
+            notification.type === "success"
+              ? "bg-emerald-950/80 border-emerald-500/40 text-emerald-200"
+              : notification.type === "error"
+              ? "bg-rose-950/80 border-rose-500/40 text-rose-200"
+              : "bg-cyan-950/80 border-cyan-500/40 text-cyan-200"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            {notification.type === "success" && <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />}
+            {notification.type === "error" && <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0" />}
+            {notification.type === "info" && <Info className="w-5 h-5 text-cyan-400 shrink-0" />}
+            <span className="text-sm font-medium">{notification.message}</span>
+          </div>
+          <button
+            onClick={() => setNotification(null)}
+            className="p-1 hover:bg-white/10 rounded-lg transition-all text-slate-400 hover:text-white"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* 1. Header & Dataset Selector Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 bg-slate-900/60 p-6 rounded-2xl border border-slate-800 backdrop-blur-xl shadow-xl">
         <div className="flex items-start gap-4">
@@ -369,7 +481,7 @@ export const DeduplicationPage: React.FC = () => {
             {runningDedupe ? (
               <>
                 <RotateCcw className="w-4 h-4 animate-spin" />
-                <span>Analyzing Demographics...</span>
+                <span>Scanning All Rows...</span>
               </>
             ) : (
               <>
@@ -459,7 +571,7 @@ export const DeduplicationPage: React.FC = () => {
       </div>
 
       {/* 3. Main Tabs Navigation */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-2 gap-4">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setActiveTab("queue")}
@@ -470,12 +582,10 @@ export const DeduplicationPage: React.FC = () => {
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>Duplicate Pairs Queue ({totalPairs})</span>
-            {stats && stats.pendingReviewCount > 0 && (
-              <span className="ml-1.5 px-2 py-0.5 text-xs font-bold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                {stats.pendingReviewCount}
-              </span>
-            )}
+            <span>Duplicate Pairs Queue</span>
+            <span className="ml-1.5 px-2 py-0.5 text-xs font-bold rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+              {totalPairs}
+            </span>
           </button>
 
           <button
@@ -488,7 +598,7 @@ export const DeduplicationPage: React.FC = () => {
           >
             <GitMerge className="w-4 h-4" />
             <span>Master Patient Index (MPI)</span>
-            <span className="ml-1.5 px-2 py-0.5 text-xs font-semibold rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+            <span className="ml-1.5 px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               {totalMpi}
             </span>
           </button>
@@ -506,7 +616,7 @@ export const DeduplicationPage: React.FC = () => {
           </button>
         </div>
 
-        {activeTab === "queue" && stats && stats.highConfidenceCount > 0 && (
+        {activeTab === "queue" && stats && stats.highConfidenceCount > 0 && statusFilter === "PENDING" && (
           <button
             onClick={handleBulkMergeHighConfidence}
             disabled={bulkResolving}
@@ -523,22 +633,33 @@ export const DeduplicationPage: React.FC = () => {
         <div className="space-y-6">
           {/* Filters Bar */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/40 p-4 rounded-xl border border-slate-800">
-            {/* Status Pills */}
+            {/* Status Pills with Live Badge Counts */}
             <div className="flex items-center gap-1.5 bg-slate-950/60 p-1 rounded-xl border border-slate-800">
-              {(["PENDING", "MERGED", "DISTINCT", "ALL"] as const).map((st) => (
+              {[
+                { key: "PENDING", label: "Pending Review", count: stats?.pendingReviewCount || 0 },
+                { key: "MERGED", label: "Merged", count: stats?.mergedCount || 0 },
+                { key: "DISTINCT", label: "Distinct", count: stats?.distinctCount || 0 },
+                { key: "ALL", label: "All Statuses", count: stats?.totalCandidatePairs || 0 },
+              ].map((st) => (
                 <button
-                  key={st}
-                  onClick={() => setStatusFilter(st)}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    statusFilter === st
+                  key={st.key}
+                  onClick={() => setStatusFilter(st.key)}
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    statusFilter === st.key
                       ? "bg-slate-800 text-cyan-400 shadow-sm border border-slate-700"
                       : "text-slate-400 hover:text-slate-200"
                   }`}
                 >
-                  {st === "PENDING" && "Pending Review"}
-                  {st === "MERGED" && "Merged"}
-                  {st === "DISTINCT" && "Distinct"}
-                  {st === "ALL" && "All Statuses"}
+                  <span>{st.label}</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                      statusFilter === st.key
+                        ? "bg-cyan-500/20 text-cyan-300"
+                        : "bg-slate-800 text-slate-400"
+                    }`}
+                  >
+                    {st.count}
+                  </span>
                 </button>
               ))}
             </div>
@@ -587,6 +708,8 @@ export const DeduplicationPage: React.FC = () => {
               <p className="text-sm text-slate-500 max-w-md mx-auto mt-1">
                 {statusFilter === "PENDING"
                   ? "All demographic pairs have been reviewed or no duplicates were identified above the confidence threshold."
+                  : statusFilter === "MERGED"
+                  ? "No merged records found for the current dataset."
                   : "No records match the current status and search filters."}
               </p>
               <button
@@ -602,6 +725,8 @@ export const DeduplicationPage: React.FC = () => {
               {pairs.map((pair) => {
                 const confPct = Math.round(pair.confidenceScore * 100);
                 const isResolving = resolvingId === pair.id;
+                const isSurvivorA = pair.status === "MERGED" && (pair.survivorRecordId === pair.recordAId || !pair.survivorRecordId);
+                const isSurvivorB = pair.status === "MERGED" && pair.survivorRecordId === pair.recordBId;
 
                 return (
                   <div
@@ -628,6 +753,12 @@ export const DeduplicationPage: React.FC = () => {
                         >
                           {pair.status}
                         </span>
+                        {pair.status === "MERGED" && (
+                          <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-md bg-emerald-950/60 text-emerald-300 border border-emerald-800">
+                            <Crown className="w-3 h-3 text-amber-400" />
+                            <span>Survivor: {pair.survivorRecordId === pair.recordBId ? "Record B" : "Record A"}</span>
+                          </span>
+                        )}
                       </div>
 
                       {/* Action Controls */}
@@ -636,7 +767,7 @@ export const DeduplicationPage: React.FC = () => {
                           <button
                             onClick={() => openMergeModal(pair)}
                             disabled={isResolving}
-                            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer"
+                            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer disabled:opacity-50"
                           >
                             <Sliders className="w-3.5 h-3.5" />
                             <span>Merge & Build Golden Record</span>
@@ -645,7 +776,7 @@ export const DeduplicationPage: React.FC = () => {
                           <button
                             onClick={() => handleQuickMerge(pair)}
                             disabled={isResolving}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 text-xs font-medium rounded-lg border border-slate-700 transition-all cursor-pointer"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 text-xs font-medium rounded-lg border border-slate-700 transition-all cursor-pointer disabled:opacity-50"
                             title="Quick merge keeping Record A primary"
                           >
                             <Check className="w-3.5 h-3.5" />
@@ -655,26 +786,52 @@ export const DeduplicationPage: React.FC = () => {
                           <button
                             onClick={() => handleMarkDistinct(pair)}
                             disabled={isResolving}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-rose-300 text-xs font-medium rounded-lg border border-slate-700 transition-all cursor-pointer"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-rose-300 text-xs font-medium rounded-lg border border-slate-700 transition-all cursor-pointer disabled:opacity-50"
                           >
                             <X className="w-3.5 h-3.5" />
                             <span>Mark Distinct</span>
                           </button>
                         </div>
                       ) : (
-                        <div className="text-xs text-slate-400 flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                          <span>
-                            Resolved: <strong className="text-slate-200">{pair.status}</strong> {pair.resolvedBy && `by ${pair.resolvedBy}`}
-                          </span>
+                        <div className="flex items-center gap-3">
+                          <div className="text-xs text-slate-400 flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                            <span>
+                              Resolved: <strong className="text-slate-200">{pair.status}</strong> {pair.resolvedBy && `by ${pair.resolvedBy}`}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleUnresolvePair(pair)}
+                            disabled={isResolving}
+                            className="flex items-center gap-1 px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-cyan-400 text-xs font-medium rounded-lg border border-slate-700 transition-all cursor-pointer disabled:opacity-50"
+                            title="Re-open candidate pair back to Pending queue"
+                          >
+                            <Undo2 className="w-3.5 h-3.5" />
+                            <span>Re-open</span>
+                          </button>
                         </div>
                       )}
                     </div>
 
+                    {/* Resolution Notes Bar (if resolved) */}
+                    {pair.status !== "PENDING" && pair.resolutionNotes && (
+                      <div className="mt-3 p-2.5 bg-slate-950/80 rounded-xl border border-slate-800/80 flex items-center gap-2 text-xs text-slate-300">
+                        <Info className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                        <span className="font-semibold text-slate-400">Resolution Note:</span>
+                        <span className="text-slate-200">{pair.resolutionNotes}</span>
+                      </div>
+                    )}
+
                     {/* Side-by-Side Patient Demographic Cards */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-5">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
                       {/* Record A */}
-                      <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80">
+                      <div
+                        className={`p-4 rounded-xl border transition-all ${
+                          isSurvivorA
+                            ? "bg-slate-950/90 border-emerald-500/40 shadow-sm"
+                            : "bg-slate-950/60 border-slate-800/80"
+                        }`}
+                      >
                         <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                           <div className="flex items-center gap-2">
                             <span className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs font-bold flex items-center justify-center border border-cyan-500/30">
@@ -683,6 +840,12 @@ export const DeduplicationPage: React.FC = () => {
                             <span className="text-xs font-semibold text-slate-200 uppercase tracking-wide">
                               Record A ({pair.recordAId})
                             </span>
+                            {isSurvivorA && (
+                              <span className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-md">
+                                <Crown className="w-3 h-3 text-amber-400" />
+                                PRIMARY SURVIVOR
+                              </span>
+                            )}
                           </div>
                           <span className="text-[11px] text-slate-500">Source Feed 1</span>
                         </div>
@@ -706,7 +869,13 @@ export const DeduplicationPage: React.FC = () => {
                       </div>
 
                       {/* Record B */}
-                      <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80">
+                      <div
+                        className={`p-4 rounded-xl border transition-all ${
+                          isSurvivorB
+                            ? "bg-slate-950/90 border-emerald-500/40 shadow-sm"
+                            : "bg-slate-950/60 border-slate-800/80"
+                        }`}
+                      >
                         <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                           <div className="flex items-center gap-2">
                             <span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold flex items-center justify-center border border-blue-500/30">
@@ -715,6 +884,12 @@ export const DeduplicationPage: React.FC = () => {
                             <span className="text-xs font-semibold text-slate-200 uppercase tracking-wide">
                               Record B ({pair.recordBId})
                             </span>
+                            {isSurvivorB && (
+                              <span className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-md">
+                                <Crown className="w-3 h-3 text-amber-400" />
+                                PRIMARY SURVIVOR
+                              </span>
+                            )}
                           </div>
                           <span className="text-[11px] text-slate-500">Source Feed 2</span>
                         </div>
@@ -775,7 +950,7 @@ export const DeduplicationPage: React.FC = () => {
       {activeTab === "mpi" && (
         <div className="space-y-6">
           <div className="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 backdrop-blur-md">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800 gap-4">
               <div>
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                   <GitMerge className="w-5 h-5 text-emerald-400" />
@@ -785,23 +960,43 @@ export const DeduplicationPage: React.FC = () => {
                   Single source-of-truth golden records synthesized from merged duplicate clinical records.
                 </p>
               </div>
-              <span className="px-3 py-1 text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full">
-                {totalMpi} Golden Records
-              </span>
+
+              {/* Search in MPI */}
+              <div className="flex items-center gap-3">
+                <div className="relative min-w-[240px]">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input
+                    type="text"
+                    placeholder="Search Master ID, name..."
+                    value={mpiSearchQuery}
+                    onChange={(e) => setMpiSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                  />
+                </div>
+                <span className="px-3 py-1.5 text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl whitespace-nowrap">
+                  {totalMpi} Golden Records
+                </span>
+              </div>
             </div>
 
-            {mpiRecords.length === 0 ? (
+            {filteredMpiRecords.length === 0 ? (
               <div className="p-12 text-center text-slate-400">
                 <FileCheck className="w-10 h-10 mx-auto text-slate-600 mb-3" />
-                <p className="font-semibold text-sm text-slate-300">No Golden Records have been created yet.</p>
+                <p className="font-semibold text-sm text-slate-300">
+                  {mpiRecords.length === 0
+                    ? "No Golden Records have been created yet."
+                    : "No Golden Records match your search query."}
+                </p>
                 <p className="text-xs text-slate-500 mt-1">
-                  Review and merge duplicate candidate pairs in the Queue to generate verified Master Patient Index entries.
+                  {mpiRecords.length === 0
+                    ? "Review and merge duplicate candidate pairs in the Queue to generate verified Master Patient Index entries."
+                    : "Try clearing or adjusting your search terms."}
                 </p>
               </div>
             ) : (
               <div className="mt-4 divide-y divide-slate-800">
-                {mpiRecords.map((mpi) => (
-                  <div key={mpi.id} className="py-4 space-y-3">
+                {filteredMpiRecords.map((mpi) => (
+                  <div key={mpi.id} className="py-4 space-y-3 hover:bg-slate-950/20 p-2 rounded-xl transition-all">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="flex items-center gap-3">
                         <span className="px-2.5 py-1 text-xs font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-lg">
