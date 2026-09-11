@@ -1,0 +1,21 @@
+patient_id,patient_name,age,gender,blood_type,admission_date,discharge_date,admission_type,icd10_code,medical_condition,systolic_bp,diastolic_bp,oxygen_saturation,length_of_stay_days,billing_amount,insurance_provider,attending_physician,test_result
+P10001,John Carter,45,Male,O+,2026-08-01,2026-08-05,Emergency,I10,Hypertension,145,92,98.4,4,12500.5,United Health,Dr. Sarah Miller,Normal
+P10002,Emily Johnson,32,Female,A+,2026-08-02,2026-08-03,Elective,E11.9,Type 2 Diabetes,118,76,97.9,1,4200.0,Aetna,Dr. Robert Lee,Normal
+P10003,Michael Brown,67,Male,B+,2026-08-03,2026-08-10,Emergency,J18.9,Pneumonia,155,95,91.2,7,18750.75,Cigna,Dr. Sarah Miller,Abnormal
+P10004,Sophia Davis,29,Female,AB+,2026-08-04,2026-08-04,Urgent,S52.5,Wrist Fracture,122,80,99.1,0,3150.25,Blue Cross,Dr. James Wilson,Normal
+P10005,William Wilson,74,Male,O-,2026-08-05,2026-08-15,Emergency,I50.9,Heart Failure,178,104,88.5,10,25600.0,Medicare,Dr. Anita Patel,Abnormal
+P10006,Olivia Martinez,51,Female,A-,2026-08-06,2026-08-09,Elective,K21.9,GERD,130,84,97.6,3,6100.4,Aetna,Dr. Robert Lee,Normal
+P10007,James Anderson,58,Male,B-,2026-08-07,2026-08-12,Urgent,N39.0,Urinary Tract Infection,126,82,96.8,5,7350.0,Cigna,Dr. James Wilson,Normal
+P10008,Ava Thomas,23,Female,O+,2026-08-08,2026-08-08,Emergency,S06.0,Concussion,112,74,98.8,0,5200.9,United Health,Dr. Sarah Miller,Normal
+P10009,Benjamin Jackson,63,Male,A+,2026-08-09,2026-08-18,Emergency,I10,Hypertension,165,99,94.1,9,14350.8,Medicare,Dr. Anita Patel,Abnormal
+P10010,Mia White,39,Female,O+,2026-08-10,2026-08-12,Elective,M54.5,Low Back Pain,124,79,98.2,2,3800.0,Blue Cross,Dr. James Wilson,Normal
+P10011,Daniel Harris,82,Male,AB-,2026-08-11,2026-08-21,Emergency,I25.1,Coronary Artery Disease,188,110,86.7,10,32100.5,Medicare,Dr. Anita Patel,Abnormal
+P10012,Isabella Martin,46,Female,B+,2026-08-12,2026-08-14,Urgent,J45.909,Asthma,138,88,93.4,2,8250.2,Aetna,Dr. Sarah Miller,Abnormal
+P10013,Liam Thompson,37,Male,O+,2026-08-13,2026-08-16,Urgent,I10,Hypertension,-120,85,98.0,3,5900.0,Cigna,Dr. Robert Lee,Normal
+P10014,Emma Garcia,55,Female,A+,2026-08-14,2026-08-13,Elective,E11.9,Type 2 Diabetes,132,81,97.2,-1,7100.0,Aetna,Dr. James Wilson,Normal
+P10015,Noah Clark,69,Male,O+,2026-08-15,2026-08-20,Emergency,INVALID,Unknown Diagnosis,172,105,89.0,5,21400.0,Medicare,Dr. Anita Patel,Abnormal
+P10016,Emma Garcia,55,Female,A+,2026-08-14,2026-08-18,Elective,E11.9,Type 2 Diabetes,132,81,97.2,4,7100.0,Aetna,Dr. James Wilson,Normal
+P10017,Liam Thompson,37,Male,O+,2026-08-13,2026-08-16,Urgent,I10,Hypertension,128,83,98.0,3,5900.0,Cigna,Dr. Robert Lee,Normal
+P10018,Charlotte Lewis,61,Female,A-,2026-08-17,2026-08-22,Emergency,J18.9,Pneumonia,160,101,90.3,5,17400.6,Blue Cross,Dr. Sarah Miller,Abnormal
+P10019,Henry Walker,48,Male,B+,2026-08-18,2026-08-20,Urgent,K21.9,GERD,129,78,98.7,2,4550.75,United Health,Dr. Robert Lee,Normal
+P10020,Amelia Hall,71,Female,O-,2026-08-19,2026-08-27,Emergency,I50.9,Heart Failure,182,108,87.9,8,23900.0,Medicare,Dr. Anita Patel,Abnormal

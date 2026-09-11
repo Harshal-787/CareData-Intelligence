@@ -1,0 +1,660 @@
+basePath: /api/v1
+definitions:
+  domain.AuditLog:
+    properties:
+      action:
+        type: string
+      createdAt:
+        type: string
+      details:
+        type: string
+      id:
+        type: string
+      ipAddress:
+        type: string
+      organizationId:
+        type: string
+      resource:
+        type: string
+      userEmail:
+        type: string
+      userId:
+        type: string
+    type: object
+  domain.AuthResponse:
+    properties:
+      accessToken:
+        type: string
+      refreshToken:
+        type: string
+      user:
+        $ref: '#/definitions/domain.UserResponse'
+    type: object
+  domain.CreateUserRequest:
+    properties:
+      email:
+        type: string
+      fullName:
+        type: string
+      password:
+        type: string
+      role:
+        $ref: '#/definitions/domain.Role'
+    type: object
+  domain.DatasetColumn:
+    properties:
+      dataType:
+        description: INTEGER, FLOAT, STRING, BOOLEAN, TIMESTAMP
+        type: string
+      name:
+        type: string
+      nullable:
+        type: boolean
+      sampleValues:
+        items:
+          type: string
+        type: array
+    type: object
+  domain.DatasetResponse:
+    properties:
+      columnsCount:
+        type: integer
+      createdAt:
+        type: string
+      errorMessage:
+        type: string
+      fileName:
+        type: string
+      fileSize:
+        type: integer
+      fileType:
+        type: string
+      id:
+        type: string
+      mimeType:
+        type: string
+      name:
+        type: string
+      organizationId:
+        type: string
+      preview:
+        items:
+          additionalProperties: true
+          type: object
+        type: array
+      qualityScore:
+        type: number
+      schema:
+        items:
+          $ref: '#/definitions/domain.DatasetColumn'
+        type: array
+      status:
+        $ref: '#/definitions/domain.DatasetStatus'
+      storagePath:
+        type: string
+      totalRecords:
+        type: integer
+      updatedAt:
+        type: string
+      uploadedBy:
+        type: string
+      uploaderEmail:
+        type: string
+    type: object
+  domain.DatasetStatsResponse:
+    properties:
+      processingDatasetsCount:
+        type: integer
+      readyDatasetsCount:
+        type: integer
+      totalDatasets:
+        type: integer
+      totalRecords:
+        type: integer
+      totalSizeBytes:
+        type: integer
+    type: object
+  domain.DatasetStatus:
+    enum:
+    - PENDING
+    - PROCESSING
+    - READY
+    - FAILED
+    type: string
+    x-enum-varnames:
+    - DatasetStatusPending
+    - DatasetStatusProcessing
+    - DatasetStatusReady
+    - DatasetStatusFailed
+  domain.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  domain.Organization:
+    properties:
+      createdAt:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      slug:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  domain.RegisterRequest:
+    properties:
+      email:
+        type: string
+      fullName:
+        type: string
+      organizationName:
+        type: string
+      password:
+        type: string
+      role:
+        $ref: '#/definitions/domain.Role'
+    type: object
+  domain.Role:
+    enum:
+    - SUPER_ADMIN
+    - ORG_ADMIN
+    - DATA_ANALYST
+    - VIEWER
+    type: string
+    x-enum-varnames:
+    - RoleSuperAdmin
+    - RoleOrgAdmin
+    - RoleDataAnalyst
+    - RoleViewer
+  domain.UserResponse:
+    properties:
+      email:
+        type: string
+      fullName:
+        type: string
+      id:
+        type: string
+      organization:
+        $ref: '#/definitions/domain.Organization'
+      organizationId:
+        type: string
+      role:
+        $ref: '#/definitions/domain.Role'
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@caredata.ai
+    name: CareData Engineering Support
+    url: https://caredata.ai/support
+  description: Enterprise AI-enabled Healthcare Data Intelligence Platform API.
+  license:
+    name: Proprietary / Healthcare Confidential
+    url: https://caredata.ai/license
+  termsOfService: https://caredata.ai/terms
+  title: CareData Intelligence Core REST API
+  version: 1.0.0
+paths:
+  /audit-logs:
+    get:
+      description: Returns immutable audit event history for HIPAA compliance (Admins
+        only)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.AuditLog'
+            type: array
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Retrieve security audit trail
+      tags:
+      - Audit Logging
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates user credentials and returns JWT Access and Refresh
+        tokens
+      parameters:
+      - description: User Credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.AuthResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: User login & JWT generation
+      tags:
+      - Authentication
+  /auth/me:
+    get:
+      description: Returns current session details, assigned role, and organization
+        info
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.UserResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get current authenticated user profile
+      tags:
+      - Authentication
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Exchanges a valid refresh token for a new access token
+      parameters:
+      - description: Refresh Token Object ({\
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties:
+            type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.AuthResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Rotate refresh token
+      tags:
+      - Authentication
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new multi-tenant organization and provisions the primary
+        Org Admin account
+      parameters:
+      - description: Organization & Admin Details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Register organization & administrator
+      tags:
+      - Authentication
+  /datasets:
+    get:
+      description: Returns catalog of ingested datasets with column count, total records,
+        and status
+      parameters:
+      - description: Search by name or filename
+        in: query
+        name: search
+        type: string
+      - description: Filter by status (PENDING, PROCESSING, READY, FAILED)
+        in: query
+        name: status
+        type: string
+      - description: Pagination limit
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.DatasetResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List organization datasets
+      tags:
+      - Datasets & Ingestion
+  /datasets/{id}:
+    delete:
+      description: Removes the dataset and associated files from the lakehouse
+      parameters:
+      - description: Dataset ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete dataset
+      tags:
+      - Datasets & Ingestion
+    get:
+      description: Returns dataset metadata along with inferred column schemas and
+        first 20 preview records
+      parameters:
+      - description: Dataset ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.DatasetResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get dataset schema & preview details
+      tags:
+      - Datasets & Ingestion
+  /datasets/{id}/download:
+    get:
+      description: Streams the original uploaded file from the lakehouse storage
+      parameters:
+      - description: Dataset ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Download raw dataset file
+      tags:
+      - Datasets & Ingestion
+  /datasets/sample:
+    post:
+      consumes:
+      - application/json
+      description: Creates and ingests realistic healthcare sample datasets (encounters,
+        demographics, labs) for instant platform exploration
+      parameters:
+      - description: Sample Type ({\
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties:
+            type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.DatasetResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Generate synthetic clinical benchmark dataset
+      tags:
+      - Datasets & Ingestion
+  /datasets/stats:
+    get:
+      description: Returns total count of datasets, total records, and lakehouse storage
+        usage
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.DatasetStatsResponse'
+      security:
+      - BearerAuth: []
+      summary: Get dataset platform statistics
+      tags:
+      - Datasets & Ingestion
+  /datasets/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Accepts multipart file upload (CSV, JSON, NDJSON, Parquet), stores
+        in Lakehouse storage, and infers column schema
+      parameters:
+      - description: Dataset file to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: Custom display name for dataset
+        in: formData
+        name: name
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.DatasetResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Upload & ingest raw healthcare dataset
+      tags:
+      - Datasets & Ingestion
+  /health:
+    get:
+      description: Returns the operational status, version, and server timestamp of
+        the API
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: System health check
+      tags:
+      - System & Health
+  /organizations:
+    get:
+      description: Returns list of all hospital networks (Super Admin only)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.Organization'
+            type: array
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List all tenant organizations
+      tags:
+      - Organizations
+  /users:
+    get:
+      description: Returns all users in the organization (or all organizations if
+        Super Admin)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.UserResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List organization users
+      tags:
+      - User Management
+    post:
+      consumes:
+      - application/json
+      description: Creates a new user inside the organization with designated RBAC
+        role (SUPER_ADMIN, ORG_ADMIN, DATA_ANALYST, VIEWER)
+      parameters:
+      - description: New User Details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.CreateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Provision new user with role
+      tags:
+      - User Management
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token (e.g. "Bearer eyJhbGci...").
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
