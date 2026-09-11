@@ -1260,7 +1260,7 @@ export const QualityPage: React.FC = () => {
                   Row-Level Clinical Violations
                 </h3>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                  {violationsTotal || violations.length} total logged
+                  {violationsTotal || violations?.length || 0} total logged
                 </span>
               </div>
               <p className="text-sm text-slate-400 mt-0.5">

@@ -101,19 +101,20 @@ export const AnalyticsPage: React.FC = () => {
   }, [selectedDataset, selectedDateRange, selectedDept, selectedAdmissionType]);
 
   // Execute SQL Studio Query
-  const handleRunQuery = async () => {
-    if (!sqlQuery.trim()) return;
+  const handleRunQuery = async (queryOverride?: string) => {
+    const targetQuery = queryOverride !== undefined ? queryOverride : sqlQuery;
+    if (!targetQuery.trim()) return;
     try {
       setSqlExecuting(true);
       const res = await executeOlapQuery({
         datasetId: selectedDataset || undefined,
-        query: sqlQuery,
+        query: targetQuery,
         limit: 500,
       });
       setSqlResult(res);
     } catch (err: any) {
       setSqlResult({
-        query: sqlQuery,
+        query: targetQuery,
         columns: [],
         rows: [],
         totalRows: 0,
@@ -278,7 +279,7 @@ export const AnalyticsPage: React.FC = () => {
             className="bg-slate-950 border border-slate-750 text-slate-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
           >
             <option value="">All Ingested Datasets</option>
-            {analyticsData?.availableFilterOptions.datasets.map((ds) => (
+            {analyticsData?.availableFilterOptions?.datasets?.map((ds) => (
               <option key={ds.id} value={ds.id}>
                 {ds.name} ({ds.totalRecords.toLocaleString()} recs)
               </option>
@@ -304,7 +305,7 @@ export const AnalyticsPage: React.FC = () => {
             className="bg-slate-950 border border-slate-750 text-slate-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
           >
             <option value="">All Clinical Departments</option>
-            {analyticsData?.availableFilterOptions.departments.map((d) => (
+            {analyticsData?.availableFilterOptions?.departments?.map((d) => (
               <option key={d} value={d}>
                 {d}
               </option>
@@ -686,9 +687,12 @@ export const AnalyticsPage: React.FC = () => {
                 <select
                   onChange={(e) => {
                     const found = queryTemplates.find((t) => t.title === e.target.value);
-                    if (found) setSqlQuery(found.query);
+                    if (found) {
+                      setSqlQuery(found.query);
+                      handleRunQuery(found.query);
+                    }
                   }}
-                  className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
+                  className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500 cursor-pointer"
                 >
                   {queryTemplates.map((t) => (
                     <option key={t.title} value={t.title}>
@@ -741,9 +745,9 @@ export const AnalyticsPage: React.FC = () => {
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={handleRunQuery}
+                  onClick={() => handleRunQuery()}
                   disabled={sqlExecuting || !sqlQuery.trim()}
-                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs font-semibold shadow-lg shadow-blue-500/20 flex items-center gap-2 disabled:opacity-50 transition-all"
+                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs font-semibold shadow-lg shadow-blue-500/20 flex items-center gap-2 disabled:opacity-50 transition-all cursor-pointer"
                 >
                   <Play className={`w-3.5 h-3.5 ${sqlExecuting ? 'animate-spin' : ''}`} />
                   {sqlExecuting ? 'Executing Query...' : 'Run OLAP Query'}
@@ -769,8 +773,8 @@ export const AnalyticsPage: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleExportCSV}
-                    disabled={sqlResult.rows.length === 0}
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40"
+                    disabled={!sqlResult?.rows || sqlResult.rows.length === 0}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40 cursor-pointer"
                   >
                     <Download className="w-3.5 h-3.5" /> Export CSV
                   </button>
@@ -781,7 +785,7 @@ export const AnalyticsPage: React.FC = () => {
                 <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-lg text-xs font-mono">
                   <strong>Query Error:</strong> {sqlResult.error}
                 </div>
-              ) : sqlResult.rows.length === 0 ? (
+              ) : (!sqlResult?.rows || sqlResult.rows.length === 0) ? (
                 <div className="p-8 text-center text-slate-400 text-sm">
                   Query executed successfully with 0 matching rows.
                 </div>
@@ -790,7 +794,7 @@ export const AnalyticsPage: React.FC = () => {
                   <table className="w-full text-left text-xs text-slate-300">
                     <thead className="bg-slate-950 text-slate-400 font-semibold border-b border-slate-800">
                       <tr>
-                        {sqlResult.columns.map((c) => (
+                        {(sqlResult.columns || []).map((c) => (
                           <th key={c.name} className="px-4 py-3 font-mono">
                             {c.name}
                           </th>
@@ -798,11 +802,11 @@ export const AnalyticsPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-mono">
-                      {sqlResult.rows.map((row, rIdx) => (
+                      {(sqlResult.rows || []).map((row, rIdx) => (
                         <tr key={rIdx} className="hover:bg-slate-800/40 transition-colors">
-                          {sqlResult.columns.map((c) => (
+                          {(sqlResult.columns || []).map((c) => (
                             <td key={c.name} className="px-4 py-2.5 text-slate-200">
-                              {row[c.name] !== null && row[c.name] !== undefined
+                              {row && row[c.name] !== null && row[c.name] !== undefined
                                 ? typeof row[c.name] === 'number'
                                   ? Number(row[c.name]).toLocaleString()
                                   : String(row[c.name])
