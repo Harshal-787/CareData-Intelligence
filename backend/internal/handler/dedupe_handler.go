@@ -187,6 +187,40 @@ func (h *DedupeHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, resolved)
 }
 
+// Unresolve godoc
+// @Summary      Re-open a resolved duplicate candidate back to PENDING status
+// @Description  Reverts MERGED or DISTINCT state so the candidate pair can be re-evaluated
+// @Tags         Patient Deduplication
+// @Produce      json
+// @Param        id path string true "Duplicate Pair ID"
+// @Success      200 {object} domain.DuplicatePair
+// @Router       /duplicates/{id}/unresolve [post]
+func (h *DedupeHandler) Unresolve(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetUserFromContext(r.Context())
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		respondError(w, http.StatusBadRequest, "Duplicate Pair ID is required")
+		return
+	}
+
+	orgID := ""
+	userID := "anonymous"
+	userEmail := "anonymous@caredata.ai"
+	if claims != nil {
+		orgID = claims.OrganizationID
+		userID = claims.UserID
+		userEmail = claims.Email
+	}
+
+	reopened, err := h.dedupeService.UnresolveDuplicate(id, orgID, userID, userEmail, r.RemoteAddr)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, reopened)
+}
+
 // BulkResolve godoc
 // @Summary      Bulk resolve high-confidence duplicate candidates
 // @Description  Automatically merges or marks distinct all pending candidate pairs with match score >= threshold

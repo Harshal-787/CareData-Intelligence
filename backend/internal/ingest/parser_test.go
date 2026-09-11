@@ -65,3 +65,21 @@ func TestSampleGenerators(t *testing.T) {
 		t.Errorf("Expected 30 lab vitals, got %d", labRes.TotalRecords)
 	}
 }
+
+func TestParseDatasetAllRows(t *testing.T) {
+	csvData := []byte(`id,first_name,last_name,dob,phone
+101,John,Smith,1980-01-01,555-1234
+102,Jon,Smith,1980-01-01,555-1234
+103,Jane,Doe,1990-05-15,555-9876
+`)
+	rows, err := ParseDatasetAllRows("csv", csvData)
+	if err != nil {
+		t.Fatalf("ParseDatasetAllRows failed: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Errorf("Expected 3 rows, got %d", len(rows))
+	}
+	if rows[0]["first_name"] != "John" || rows[1]["first_name"] != "Jon" {
+		t.Errorf("Unexpected row content: %+v", rows)
+	}
+}
