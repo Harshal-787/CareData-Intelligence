@@ -108,6 +108,18 @@ export const resolveDuplicatePair = async (
   };
 };
 
+export const unresolveDuplicatePair = async (id: string): Promise<DuplicatePair> => {
+  const response = await api.post<DuplicatePair>(`/duplicates/${id}/unresolve`);
+  const p = response.data;
+  return {
+    ...p,
+    recordAData: p?.recordAData || {},
+    recordBData: p?.recordBData || {},
+    fieldScores: p?.fieldScores || [],
+    goldenRecordData: p?.goldenRecordData || {},
+  };
+};
+
 export const bulkResolveDuplicates = async (
   data: BulkResolveRequest
 ): Promise<{ message: string; resolvedCount: number; action: string }> => {

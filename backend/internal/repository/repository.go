@@ -716,6 +716,93 @@ func (r *Repository) DeleteDuplicatePairsByDataset(datasetID string) error {
 	return err
 }
 
+func (r *Repository) DeletePendingDuplicatePairsByDataset(datasetID string) error {
+	query := "DELETE FROM duplicate_pairs WHERE dataset_id = $1 AND status = 'PENDING'"
+	if r.db.Driver == "sqlite3" {
+		query = "DELETE FROM duplicate_pairs WHERE dataset_id = ? AND status = 'PENDING'"
+	}
+	_, err := r.db.Exec(query, datasetID)
+	return err
+}
+
+func (r *Repository) GetResolvedPairsByDataset(datasetID string) (map[string]domain.DuplicatePair, error) {
+	query := `SELECT id, dataset_id, organization_id, record_a_id, record_b_id,
+		record_a_data, record_b_data, confidence_score, field_scores_json, status,
+		resolution_notes, resolved_by, resolved_at, survivor_record_id, golden_record_json,
+		created_at, updated_at
+		FROM duplicate_pairs
+		WHERE dataset_id = $1 AND status IN ('MERGED', 'DISTINCT')`
+	if r.db.Driver == "sqlite3" {
+		query = `SELECT id, dataset_id, organization_id, record_a_id, record_b_id,
+			record_a_data, record_b_data, confidence_score, field_scores_json, status,
+			resolution_notes, resolved_by, resolved_at, survivor_record_id, golden_record_json,
+			created_at, updated_at
+			FROM duplicate_pairs
+			WHERE dataset_id = ? AND status IN ('MERGED', 'DISTINCT')`
+	}
+
+	rows, err := r.db.Query(query, datasetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	resolvedMap := make(map[string]domain.DuplicatePair)
+	for rows.Next() {
+		var p domain.DuplicatePair
+		var recAStr, recBStr, fieldScoresStr, goldenStr, statusStr string
+		var resolvedBy sql.NullString
+		var resolvedAt sql.NullTime
+		var survivorID sql.NullString
+
+		if err := rows.Scan(
+			&p.ID, &p.DatasetID, &p.OrganizationID, &p.RecordAID, &p.RecordBID,
+			&recAStr, &recBStr, &p.ConfidenceScore, &fieldScoresStr, &statusStr,
+			&p.ResolutionNotes, &resolvedBy, &resolvedAt, &survivorID, &goldenStr,
+			&p.CreatedAt, &p.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		p.Status = domain.DuplicateStatus(statusStr)
+		if resolvedBy.Valid {
+			p.ResolvedBy = resolvedBy.String
+		}
+		if resolvedAt.Valid {
+			p.ResolvedAt = &resolvedAt.Time
+		}
+		if survivorID.Valid {
+			p.SurvivorRecordID = survivorID.String
+		}
+		_ = json.Unmarshal([]byte(recAStr), &p.RecordAData)
+		_ = json.Unmarshal([]byte(recBStr), &p.RecordBData)
+		_ = json.Unmarshal([]byte(fieldScoresStr), &p.FieldScores)
+		_ = json.Unmarshal([]byte(goldenStr), &p.GoldenRecordData)
+
+		key1 := fmt.Sprintf("%s:%s", p.RecordAID, p.RecordBID)
+		key2 := fmt.Sprintf("%s:%s", p.RecordBID, p.RecordAID)
+		resolvedMap[key1] = p
+		resolvedMap[key2] = p
+	}
+
+	return resolvedMap, nil
+}
+
+func (r *Repository) UnresolveDuplicatePair(pairID, orgID string) error {
+	now := time.Now()
+	query := `UPDATE duplicate_pairs SET status = 'PENDING', survivor_record_id = '', golden_record_json = '{}',
+		resolution_notes = 'Reopened for review', resolved_by = '', resolved_at = NULL, updated_at = $1
+		WHERE id = $2 AND (organization_id = $3 OR organization_id = '')`
+
+	if r.db.Driver == "sqlite3" {
+		query = `UPDATE duplicate_pairs SET status = 'PENDING', survivor_record_id = '', golden_record_json = '{}',
+			resolution_notes = 'Reopened for review', resolved_by = '', resolved_at = NULL, updated_at = ?
+			WHERE id = ? AND (organization_id = ? OR organization_id = '')`
+	}
+
+	_, err := r.db.Exec(query, now, pairID, orgID)
+	return err
+}
+
 func (r *Repository) GetDuplicatePairByID(id string) (*domain.DuplicatePair, error) {
 	query := `SELECT id, dataset_id, organization_id, record_a_id, record_b_id, record_a_data, record_b_data,
 		confidence_score, field_scores_json, status, resolution_notes, resolved_by, resolved_at,
