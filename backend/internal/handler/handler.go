@@ -72,6 +72,37 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusCreated, res)
 }
 
+// RegisterUser godoc
+// @Summary      Register a new user into an existing organization
+// @Description  Allows a user to self-register using an Organization ID or Invite Code
+// @Tags         Authentication
+// @Accept       json
+// @Produce      json
+// @Param        request body domain.RegisterUserRequest true "User Registration Details"
+// @Success      201 {object} domain.AuthResponse
+// @Failure      400 {object} map[string]string
+// @Router       /auth/register/user [post]
+func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
+	var req domain.RegisterUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	if req.Email == "" || req.Password == "" || req.FullName == "" || req.OrganizationID == "" {
+		respondError(w, http.StatusBadRequest, "All fields (organizationId, fullName, email, password) are required")
+		return
+	}
+
+	res, err := h.authService.RegisterUser(&req)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, res)
+}
+
 // Login godoc
 // @Summary      User login & JWT generation
 // @Description  Authenticates user credentials and returns JWT Access and Refresh tokens

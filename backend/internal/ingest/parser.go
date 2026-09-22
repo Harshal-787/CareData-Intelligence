@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"caredata/backend/internal/domain"
+	"github.com/xitongsys/parquet-go-source/buffer"
+	"github.com/xitongsys/parquet-go/reader"
 )
 
 type ParseResult struct {
@@ -21,6 +23,7 @@ type ParseResult struct {
 	ColumnsCount int                      `json:"columnsCount"`
 	Schema       []domain.DatasetColumn   `json:"schema"`
 	Preview      []map[string]interface{} `json:"preview"`
+	Records      []map[string]interface{} `json:"-"`
 	QualityScore float64                  `json:"qualityScore"`
 }
 
@@ -33,285 +36,184 @@ var datePatterns = []string{
 	"2006/01/02",
 }
 
-// ParseDatasetContent inspects raw byte content, detects columns, infers data types, generates preview, and calculates quality score.
-func ParseDatasetContent(fileType string, data []byte) (*ParseResult, error) {
-	switch strings.ToLower(fileType) {
-	case "csv":
-		return parseCSV(data)
-	case "json":
-		return parseJSON(data)
-	case "ndjson", "jsonl":
-		return parseNDJSON(data)
-	default:
-		// Default to CSV
-		return parseCSV(data)
+// ParseDatasetStream inspects a stream of records, infers data types from the first 500 rows, generates a 20-row preview, and computes the completeness score across the entire dataset.
+func ParseDatasetStream(fileType string, iter RecordIterator) (*ParseResult, error) {
+	if iter == nil {
+		return nil, fmt.Errorf("iterator is nil")
 	}
-}
 
-// ParseDatasetAllRows parses all records in raw bytes into slice of map[string]interface{} for full deduplication and profiling
-func ParseDatasetAllRows(fileType string, data []byte) ([]map[string]interface{}, error) {
-	if len(data) == 0 {
-		return nil, fmt.Errorf("dataset content is empty")
-	}
-	switch strings.ToLower(fileType) {
-	case "json":
-		var records []map[string]interface{}
-		if err := json.Unmarshal(data, &records); err == nil {
-			return records, nil
-		}
-		var single map[string]interface{}
-		if err := json.Unmarshal(data, &single); err == nil {
-			return []map[string]interface{}{single}, nil
-		}
-		return nil, fmt.Errorf("invalid json content")
-	case "ndjson", "jsonl":
-		lines := bytes.Split(data, []byte("\n"))
-		var records []map[string]interface{}
-		for _, line := range lines {
-			trimmed := bytes.TrimSpace(line)
-			if len(trimmed) == 0 {
-				continue
-			}
-			var record map[string]interface{}
-			if err := json.Unmarshal(trimmed, &record); err == nil {
-				records = append(records, record)
-			}
-		}
-		return records, nil
-	default:
-		// CSV
-		reader := csv.NewReader(bytes.NewReader(data))
-		reader.LazyQuotes = true
-		reader.TrimLeadingSpace = true
+	var totalRecords int64
+	var totalNulls int64
+	var columnsCount int
+	var schema []domain.DatasetColumn
+	var preview []map[string]interface{}
+	
+	// Collect sample data for inference (up to 500 rows)
+	var sampleRows []map[string]interface{}
 
-		firstLine := string(bytes.Split(data, []byte("\n"))[0])
-		if strings.Count(firstLine, "\t") > strings.Count(firstLine, ",") {
-			reader.Comma = '\t'
-		} else if strings.Count(firstLine, ";") > strings.Count(firstLine, ",") {
-			reader.Comma = ';'
-		}
-
-		headers, err := reader.Read()
+	for {
+		record, err := iter.Next()
 		if err != nil {
-			return nil, fmt.Errorf("failed to read CSV headers: %w", err)
-		}
-
-		for i, h := range headers {
-			headers[i] = strings.TrimSpace(h)
-			if headers[i] == "" {
-				headers[i] = fmt.Sprintf("column_%d", i+1)
-			}
-		}
-
-		var records []map[string]interface{}
-		for {
-			row, err := reader.Read()
 			if err == io.EOF {
 				break
 			}
-			if err != nil {
-				continue
+			return nil, fmt.Errorf("failed to read record at row %d: %w", totalRecords, err)
+		}
+
+		totalRecords++
+
+		if totalRecords <= 20 {
+			preview = append(preview, record)
+		}
+		
+		if totalRecords <= 500 {
+			sampleRows = append(sampleRows, record)
+		}
+
+		// Count nulls dynamically across the ENTIRE stream
+		for _, v := range record {
+			if v == nil || v == "" {
+				totalNulls++
 			}
-			if len(row) == len(headers) {
-				m := make(map[string]interface{}, len(headers))
-				for i, h := range headers {
-					m[h] = strings.TrimSpace(row[i])
-				}
-				records = append(records, m)
-			}
 		}
-		return records, nil
-	}
-}
 
-func parseCSV(data []byte) (*ParseResult, error) {
-	if len(data) == 0 {
-		return nil, fmt.Errorf("dataset content is empty")
-	}
-
-	reader := csv.NewReader(bytes.NewReader(data))
-	reader.LazyQuotes = true
-	reader.TrimLeadingSpace = true
-
-	// Detect delimiter (e.g. comma, semicolon, tab)
-	firstLine := string(bytes.Split(data, []byte("\n"))[0])
-	if strings.Count(firstLine, "\t") > strings.Count(firstLine, ",") {
-		reader.Comma = '\t'
-	} else if strings.Count(firstLine, ";") > strings.Count(firstLine, ",") {
-		reader.Comma = ';'
-	}
-
-	headers, err := reader.Read()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read CSV headers: %w", err)
-	}
-
-	for i, h := range headers {
-		headers[i] = strings.TrimSpace(h)
-		if headers[i] == "" {
-			headers[i] = fmt.Sprintf("column_%d", i+1)
+		// For the first row, count total cells per row (approximate columns count)
+		if totalRecords == 1 {
+			columnsCount = len(record)
 		}
 	}
 
-	var allRows [][]string
-	for {
-		record, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			// Skip malformed row or continue
-			continue
-		}
-		if len(record) == len(headers) {
-			allRows = append(allRows, record)
-		}
-	}
-
-	totalRecords := int64(len(allRows))
 	if totalRecords == 0 {
-		return &ParseResult{
-			TotalRecords: 0,
-			ColumnsCount: len(headers),
-			Schema:       make([]domain.DatasetColumn, 0),
-			Preview:      make([]map[string]interface{}, 0),
-			QualityScore: 100.0,
-		}, nil
+		return nil, fmt.Errorf("dataset contains no records")
 	}
 
-	// Infer types and collect samples per column
-	schema := make([]domain.DatasetColumn, len(headers))
-	colNullCounts := make([]int64, len(headers))
-
-	// Sample up to 500 rows for type inference
-	sampleLimit := len(allRows)
-	if sampleLimit > 500 {
-		sampleLimit = 500
-	}
-
-	for colIdx, header := range headers {
-		typeCounts := map[string]int{
-			"INTEGER":   0,
-			"FLOAT":     0,
-			"BOOLEAN":   0,
-			"TIMESTAMP": 0,
-			"STRING":    0,
-		}
-		var sampleValues []string
-		hasNull := false
-
-		for r := 0; r < len(allRows); r++ {
-			val := strings.TrimSpace(allRows[r][colIdx])
-			if val == "" || strings.EqualFold(val, "null") || strings.EqualFold(val, "n/a") || strings.EqualFold(val, "none") {
-				colNullCounts[colIdx]++
-				hasNull = true
-				continue
-			}
-
-			if r < sampleLimit {
-				inferred := inferSingleValueType(val)
-				typeCounts[inferred]++
-				if len(sampleValues) < 5 {
-					sampleValues = append(sampleValues, val)
-				}
-			}
-		}
-
-		bestType := selectBestType(typeCounts)
-		schema[colIdx] = domain.DatasetColumn{
-			Name:         header,
-			DataType:     bestType,
-			Nullable:     hasNull,
-			SampleValues: sampleValues,
-		}
-	}
-
-	// Generate preview up to 20 rows
-	previewLimit := len(allRows)
-	if previewLimit > 20 {
-		previewLimit = 20
-	}
-
-	preview := make([]map[string]interface{}, previewLimit)
-	for r := 0; r < previewLimit; r++ {
-		rowMap := make(map[string]interface{})
-		for c, header := range headers {
-			rawVal := allRows[r][c]
-			rowMap[header] = castValue(rawVal, schema[c].DataType)
-		}
-		preview[r] = rowMap
-	}
-
-	// Compute quality score based on non-null ratio
-	var totalCells = float64(totalRecords * int64(len(headers)))
-	var totalNulls int64
-	for _, n := range colNullCounts {
-		totalNulls += n
-	}
-
+	// Calculate schema from the collected sample rows
+	schema = inferSchema(sampleRows)
+	
+	// Calculate total cells (totalRecords * columnsCount)
+	totalCells := float64(totalRecords * int64(columnsCount))
+	
 	qualityScore := 100.0
 	if totalCells > 0 {
-		completeness := (totalCells - float64(totalNulls)) / totalCells * 100.0
-		qualityScore = math.Round(completeness*10) / 10
+		completeness := (totalCells - float64(totalNulls)) / totalCells
+		qualityScore = math.Round(completeness*1000) / 10
 	}
 
 	return &ParseResult{
 		TotalRecords: totalRecords,
-		ColumnsCount: len(headers),
+		ColumnsCount: columnsCount,
 		Schema:       schema,
 		Preview:      preview,
 		QualityScore: qualityScore,
 	}, nil
 }
 
-func parseJSON(data []byte) (*ParseResult, error) {
-	var records []map[string]interface{}
+// ParseDatasetContent provides a backward-compatible wrapper for []byte data
+func ParseDatasetContent(fileType string, data []byte) (*ParseResult, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("dataset content is empty")
+	}
 
-	if err := json.Unmarshal(data, &records); err != nil {
-		// Try unmarshaling as single object
-		var singleRecord map[string]interface{}
-		if err2 := json.Unmarshal(data, &singleRecord); err2 == nil {
-			records = []map[string]interface{}{singleRecord}
-		} else {
-			return nil, fmt.Errorf("invalid JSON array of objects: %w", err)
+	var iter RecordIterator
+	var err error
+
+	if strings.ToLower(fileType) == "parquet" {
+		bufFile := buffer.NewBufferFileFromBytes(data)
+		pr, err2 := reader.NewParquetReader(bufFile, nil, 4)
+		if err2 != nil {
+			return nil, err2
+		}
+		
+		// Read all records to recreate iterator (since parquet-go-source lacks an easy streaming adapter for in-memory bytes)
+		num := int(pr.GetNumRows())
+		res, err2 := pr.ReadByNumber(num)
+		pr.ReadStop()
+		if err2 != nil {
+			return nil, err2
+		}
+		jsonBs, _ := json.Marshal(res)
+		var records []map[string]interface{}
+		_ = json.Unmarshal(jsonBs, &records)
+		for i, rec := range records {
+			fixedRec := make(map[string]interface{}, len(rec))
+			for k, v := range rec {
+				fixedRec[strings.ToLower(k)] = v
+			}
+			records[i] = fixedRec
+		}
+		iter = NewMemoryIterator(records)
+	} else {
+		rc := io.NopCloser(bytes.NewReader(data))
+		iter, err = NewRecordIterator(fileType, rc, "")
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	return processObjectRecords(records)
+	return ParseDatasetStream(fileType, iter)
 }
 
-func parseNDJSON(data []byte) (*ParseResult, error) {
-	lines := bytes.Split(data, []byte("\n"))
-	var records []map[string]interface{}
-
-	for _, line := range lines {
-		trimmed := bytes.TrimSpace(line)
-		if len(trimmed) == 0 {
-			continue
-		}
-		var record map[string]interface{}
-		if err := json.Unmarshal(trimmed, &record); err == nil {
-			records = append(records, record)
-		}
+// ParseDatasetAllRows reads the entire dataset into memory for services that strictly require full data (e.g. Deduplication)
+func ParseDatasetAllRows(fileType string, data []byte) ([]map[string]interface{}, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("dataset content is empty")
 	}
 
+	var iter RecordIterator
+	var err error
+
+	if strings.ToLower(fileType) == "parquet" {
+		bufFile := buffer.NewBufferFileFromBytes(data)
+		pr, err2 := reader.NewParquetReader(bufFile, nil, 4)
+		if err2 != nil {
+			return nil, err2
+		}
+		num := int(pr.GetNumRows())
+		res, err2 := pr.ReadByNumber(num)
+		pr.ReadStop()
+		if err2 != nil {
+			return nil, err2
+		}
+		jsonBs, _ := json.Marshal(res)
+		var records []map[string]interface{}
+		_ = json.Unmarshal(jsonBs, &records)
+		for i, rec := range records {
+			fixedRec := make(map[string]interface{}, len(rec))
+			for k, v := range rec {
+				fixedRec[strings.ToLower(k)] = v
+			}
+			records[i] = fixedRec
+		}
+		return records, nil
+	}
+
+	rc := io.NopCloser(bytes.NewReader(data))
+	iter, err = NewRecordIterator(fileType, rc, "")
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var allRows []map[string]interface{}
+	for {
+		record, err := iter.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		allRows = append(allRows, record)
+	}
+	return allRows, nil
+}
+
+
+
+
+func inferSchema(records []map[string]interface{}) []domain.DatasetColumn {
 	if len(records) == 0 {
-		return nil, fmt.Errorf("no valid JSON objects found in newline-delimited stream")
-	}
-
-	return processObjectRecords(records)
-}
-
-func processObjectRecords(records []map[string]interface{}) (*ParseResult, error) {
-	totalRecords := int64(len(records))
-	if totalRecords == 0 {
-		return &ParseResult{
-			TotalRecords: 0,
-			ColumnsCount: 0,
-			Schema:       make([]domain.DatasetColumn, 0),
-			Preview:      make([]map[string]interface{}, 0),
-			QualityScore: 100.0,
-		}, nil
+		return []domain.DatasetColumn{}
 	}
 
 	// Extract unique headers preserving order
@@ -393,33 +295,7 @@ func processObjectRecords(records []map[string]interface{}) (*ParseResult, error
 		}
 	}
 
-	// Generate preview up to 20 rows
-	previewLimit := len(records)
-	if previewLimit > 20 {
-		previewLimit = 20
-	}
-	preview := records[:previewLimit]
-
-	// Compute quality score
-	var totalCells = float64(totalRecords * int64(len(headers)))
-	var totalNulls int64
-	for _, n := range colNullCounts {
-		totalNulls += n
-	}
-
-	qualityScore := 100.0
-	if totalCells > 0 {
-		completeness := (totalCells - float64(totalNulls)) / totalCells * 100.0
-		qualityScore = math.Round(completeness*10) / 10
-	}
-
-	return &ParseResult{
-		TotalRecords: totalRecords,
-		ColumnsCount: len(headers),
-		Schema:       schema,
-		Preview:      preview,
-		QualityScore: qualityScore,
-	}, nil
+	return schema
 }
 
 func inferSingleValueType(val string) string {

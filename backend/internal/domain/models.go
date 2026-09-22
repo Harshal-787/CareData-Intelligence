@@ -28,6 +28,8 @@ type User struct {
 	OrganizationID string    `json:"organizationId"`
 	Email          string    `json:"email"`
 	PasswordHash   string    `json:"-"`
+	TOTPSecret     string    `json:"-"`
+	TOTPEnabled    bool      `json:"totpEnabled"`
 	FullName       string    `json:"fullName"`
 	Role           Role      `json:"role"`
 	IsActive       bool      `json:"isActive"`
@@ -72,7 +74,16 @@ type RegisterRequest struct {
 	FullName         string `json:"fullName"`
 	Email            string `json:"email"`
 	Password         string `json:"password"`
-	Role             Role   `json:"role,omitempty"`
+	Role             Role   `json:"role,omitempty"` // Default ORG_ADMIN
+}
+
+type RegisterUserRequest struct {
+	OrganizationID string `json:"organizationId"`
+	InviteCode     string `json:"inviteCode,omitempty"`
+	FullName       string `json:"fullName"`
+	Email          string `json:"email"`
+	Password       string `json:"password"`
+	Role           Role   `json:"role"`
 }
 
 type CreateUserRequest struct {
@@ -808,6 +819,7 @@ type AIChatMessage struct {
 	ExecutionTimeMs float64                  `json:"executionTimeMs,omitempty"`
 	Engine          string                   `json:"engine,omitempty"`
 	Model           string                   `json:"model,omitempty"`
+	Metadata        map[string]interface{}   `json:"metadata,omitempty"`
 	CreatedAt       time.Time                `json:"createdAt"`
 }
 
@@ -868,7 +880,7 @@ type AIReportRequest struct {
 	Sections  []string `json:"sections,omitempty"`
 }
 
-type OllamaStatusResponse struct {
+type GeminiStatusResponse struct {
 	Connected       bool     `json:"connected"`
 	URL             string   `json:"url"`
 	ActiveModel     string   `json:"activeModel"`

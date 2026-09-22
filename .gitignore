@@ -21,6 +21,9 @@ build/
 # Logs
 logs/
 *.log
+backend.log
+frontend.log
+data-engine.log
 
 # Editor & OS files
 .DS_Store
@@ -52,6 +55,10 @@ backend/caredata.db
 *.sqlite
 *.sqlite3
 
+# Local Lakehouse Storage
+backend/storage/lakehouse/*
+!backend/storage/lakehouse/.gitkeep
+
 # Python artifacts
 __pycache__/
 *.py[cod]
@@ -80,3 +87,7 @@ share/python-wheels/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# MLFlow & Data Engine Artifacts
+data-engine/mlruns/
+data-engine/mlflow.db

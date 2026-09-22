@@ -17,7 +17,7 @@ export const LandingFooter: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-8 lg:gap-12">
           {/* Brand Col */}
           <div className="md:col-span-2 space-y-4">
-            <BrandLogo size="md" />
+            <BrandLogo />
             <p className="text-slate-400 text-xs leading-relaxed max-w-sm">
               CareData Intelligence is an enterprise-grade healthcare lakehouse and clinical intelligence platform. Featuring real-time data quality profiling, probabilistic Master Patient Index (MPI) deduplication, DuckDB analytics, and 100% on-premise AI.
             </p>
@@ -55,7 +55,7 @@ export const LandingFooter: React.FC = () => {
               </li>
               <li>
                 <a href="#features" className="hover:text-cyan-400 transition">
-                  Ollama Local AI
+                  Gemini Local AI
                 </a>
               </li>
             </ul>

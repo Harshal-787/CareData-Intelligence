@@ -90,6 +90,62 @@ func (s *AuthService) Register(req *domain.RegisterRequest) (*domain.AuthRespons
 	return s.generateAuthResponse(user, org)
 }
 
+func (s *AuthService) RegisterUser(req *domain.RegisterUserRequest) (*domain.AuthResponse, error) {
+	existing, err := s.repo.GetUserByEmail(req.Email)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing user: %w", err)
+	}
+	if existing != nil {
+		return nil, errors.New("user with this email already exists")
+	}
+
+	org, err := s.repo.GetOrgByID(req.OrganizationID)
+	if err != nil || org == nil {
+		return nil, errors.New("invalid organization ID or invite code")
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	role := domain.RoleViewer // default safe role
+	if req.Role != "" {
+		role = req.Role
+	}
+
+	now := time.Now()
+	user := &domain.User{
+		ID:             "usr-" + uuid.New().String()[:8],
+		OrganizationID: org.ID,
+		Email:          req.Email,
+		PasswordHash:   string(hashedPassword),
+		FullName:       req.FullName,
+		Role:           role,
+		IsActive:       true, // In a strict flow, this could be false pending approval
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+
+	if err := s.repo.CreateUser(user); err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	_ = s.repo.CreateAuditLog(&domain.AuditLog{
+		ID:             "audit-" + uuid.New().String()[:8],
+		OrganizationID: org.ID,
+		UserID:         user.ID,
+		UserEmail:      user.Email,
+		Action:         "REGISTER_USER",
+		Resource:       "USER",
+		Details:        fmt.Sprintf("User %s registered into organization %s", user.Email, org.Name),
+		IPAddress:      "127.0.0.1",
+		CreatedAt:      now,
+	})
+
+	return s.generateAuthResponse(user, org)
+}
+
 func (s *AuthService) Login(req *domain.LoginRequest) (*domain.AuthResponse, error) {
 	user, err := s.repo.GetUserByEmail(req.Email)
 	if err != nil {

@@ -18,8 +18,9 @@ func NewAIHandler(aiService *service.AIService) *AIHandler {
 	return &AIHandler{aiService: aiService}
 }
 
-func (h *AIHandler) GetOllamaStatus(w http.ResponseWriter, r *http.Request) {
-	status := h.aiService.GetOllamaStatus()
+// GetGeminiStatus godoc
+func (h *AIHandler) GetGeminiStatus(w http.ResponseWriter, r *http.Request) {
+	status := h.aiService.GetGeminiStatus()
 	respondJSON(w, http.StatusOK, status)
 }
 
@@ -178,4 +179,19 @@ func (h *AIHandler) GetReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, report)
+}
+
+func (h *AIHandler) DeleteReport(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		respondError(w, http.StatusBadRequest, "report id is required")
+		return
+	}
+
+	if err := h.aiService.DeleteReport(id); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": "Report deleted successfully"})
 }

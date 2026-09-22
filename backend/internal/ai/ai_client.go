@@ -17,55 +17,39 @@ import (
 )
 
 type AIClient struct {
-	ollamaURL   string
+	geminiKey   string
 	activeModel string
 	httpClient  *http.Client
 }
 
-func NewAIClient(ollamaURL, defaultModel string) *AIClient {
-	if ollamaURL == "" {
-		ollamaURL = "http://localhost:11434"
-	}
+func NewAIClient(geminiKey, defaultModel string) *AIClient {
 	if defaultModel == "" {
-		defaultModel = "llama3"
+		defaultModel = "gemini-3.6-flash"
 	}
 	return &AIClient{
-		ollamaURL:   ollamaURL,
+		geminiKey:   geminiKey,
 		activeModel: defaultModel,
 		httpClient:  &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
-func (c *AIClient) GetStatus() domain.OllamaStatusResponse {
-	resp, err := c.httpClient.Get(fmt.Sprintf("%s/api/tags", c.ollamaURL))
-	if err == nil && resp.StatusCode == http.StatusOK {
-		defer resp.Body.Close()
-		var tagResp struct {
-			Models []struct {
-				Name string `json:"name"`
-			} `json:"models"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&tagResp); err == nil && len(tagResp.Models) > 0 {
-			var models []string
-			for _, m := range tagResp.Models {
-				models = append(models, m.Name)
-			}
-			return domain.OllamaStatusResponse{
-				Connected:       true,
-				URL:             c.ollamaURL,
-				ActiveModel:     c.activeModel,
-				AvailableModels: models,
-			}
+func (c *AIClient) GetStatus() domain.GeminiStatusResponse {
+	if c.geminiKey != "" {
+		return domain.GeminiStatusResponse{
+			Connected:       true,
+			URL:             "https://generativelanguage.googleapis.com",
+			ActiveModel:     c.activeModel,
+			AvailableModels: []string{"gemini-3.6-flash", "gemini-3.7-flash"},
 		}
 	}
 
 	// Offline fallback
-	return domain.OllamaStatusResponse{
+	return domain.GeminiStatusResponse{
 		Connected:       false,
-		URL:             c.ollamaURL,
+		URL:             "Google Gemini API",
 		ActiveModel:     c.activeModel,
-		AvailableModels: []string{"llama3", "mistral", "meditron", "qwen2.5"},
-		FallbackEngine:  "CareData Rule-Based Clinical NLQ Engine",
+		AvailableModels: []string{"gemini-3.6-flash", "gemini-3.7-flash"},
+		FallbackEngine:  "Mock / Offline Mode",
 	}
 }
 
@@ -110,10 +94,10 @@ func (c *AIClient) AnswerQuestion(question, model string) (*domain.AIChatMessage
 		}, nil
 	}
 
-	// 2. Try Direct Ollama HTTP Call
-	ollamaText, err := c.queryOllamaDirect(question, model)
-	if err == nil && ollamaText != "" {
-		sql, narrative := extractSQLAndNarrative(ollamaText)
+	// 2. Try Direct Gemini HTTP Call
+	geminiText, err := c.queryGeminiDirect(question, model)
+	if err == nil && geminiText != "" {
+		sql, narrative := extractSQLAndNarrative(geminiText)
 		if sql == "" {
 			sql, _ = c.generateNativeSQL(question)
 		}
@@ -128,7 +112,7 @@ func (c *AIClient) AnswerQuestion(question, model string) (*domain.AIChatMessage
 			Rows:            rows,
 			RowCount:        int64(len(rows)),
 			ExecutionTimeMs: execTime,
-			Engine:          fmt.Sprintf("Ollama Local LLM (%s)", model),
+			Engine:          fmt.Sprintf("Google Gemini API (%s)", model),
 			Model:           model,
 			CreatedAt:       time.Now(),
 		}, nil
@@ -176,19 +160,33 @@ func (c *AIClient) tryPythonEngine(question, model string) (*pythonAIOutput, err
 	return &res, nil
 }
 
-func (c *AIClient) queryOllamaDirect(prompt, model string) (string, error) {
-	systemPrompt := "You are CareData AI, an expert healthcare data intelligence assistant. Generate safe SQL queries enclosed in ```sql ... ``` code block followed by clinical insight notes."
+func (c *AIClient) queryGeminiDirect(prompt, model string) (string, error) {
+	if c.geminiKey == "" {
+		return "", fmt.Errorf("gemini API key is not configured")
+	}
+
+	systemInstruction := "You are CareData AI, an expert healthcare data intelligence assistant. Generate safe SQL queries enclosed in ```sql ... ``` code block followed by clinical insight notes."
+	
 	payload := map[string]interface{}{
-		"model":  model,
-		"prompt": prompt,
-		"system": systemPrompt,
-		"stream": false,
-		"options": map[string]interface{}{
+		"systemInstruction": map[string]interface{}{
+			"parts": []map[string]interface{}{
+				{"text": systemInstruction},
+			},
+		},
+		"contents": []map[string]interface{}{
+			{
+				"parts": []map[string]interface{}{
+					{"text": prompt},
+				},
+			},
+		},
+		"generationConfig": map[string]interface{}{
 			"temperature": 0.1,
 		},
 	}
 	body, _ := json.Marshal(payload)
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/generate", c.ollamaURL), bytes.NewReader(body))
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, c.geminiKey)
+	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}
@@ -201,17 +199,29 @@ func (c *AIClient) queryOllamaDirect(prompt, model string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("status: %d", resp.StatusCode)
+		respBody, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("status: %d, response: %s", resp.StatusCode, string(respBody))
 	}
 
 	var genResp struct {
-		Response string `json:"response"`
+		Candidates []struct {
+			Content struct {
+				Parts []struct {
+					Text string `json:"text"`
+				} `json:"parts"`
+			} `json:"content"`
+		} `json:"candidates"`
 	}
+	
 	if err := json.NewDecoder(resp.Body).Decode(&genResp); err != nil {
 		return "", err
 	}
 
-	return genResp.Response, nil
+	if len(genResp.Candidates) > 0 && len(genResp.Candidates[0].Content.Parts) > 0 {
+		return genResp.Candidates[0].Content.Parts[0].Text, nil
+	}
+
+	return "", fmt.Errorf("no content returned from gemini")
 }
 
 func extractSQLAndNarrative(text string) (string, string) {
@@ -601,110 +611,7 @@ func (c *AIClient) generateSampleResultRows(sql string) ([]map[string]interface{
 	return rows, cols
 }
 
-func (c *AIClient) GenerateNarrative(datasetName string) domain.AINarrativeInsight {
-	if datasetName == "" {
-		datasetName = "Clinical Vitals & Encounter Benchmark Feed"
-	}
-
-	return domain.AINarrativeInsight{
-		DatasetName:      datasetName,
-		ExecutiveSummary: fmt.Sprintf("Automated AI synthesis of %s reveals a healthy overall data quality score of 94.6%% with 18 flagged anomalies and 14 patients stratified into the high 30-day readmission risk tier.", datasetName),
-		KeyFindings: []string{
-			"Data Quality index is performing at 94.6%, with highest adherence in patient demographics and ICD-10 formatting.",
-			"Isolation Forest flagged 6 critical anomalies primarily driven by severe vital sign decompensations (BP > 180/110 mmHg and tachycardia).",
-			"Financial outlier analysis identified 2 high-variance surgical claims requiring DRG billing audit.",
-			"Patient risk stratification identified 14 high-risk patients with average 30-day readmission probability of 87.2%.",
-		},
-		StrategicRisks: []string{
-			"Cardiology unit readmission rate (16.9%) exceeds target threshold of 12.0%.",
-			"Billing variance in orthopedic surgical supplies is 35% above regional benchmark.",
-		},
-		RecommendedActions: []string{
-			"Deploy 48-hour post-discharge telemedicine checkups for all Tier 1 high-risk patients.",
-			"Initiate pharmacist medication reconciliation for patients with Charlson Comorbidity Index ≥ 4.",
-			"Conduct clinical coding audit on outlier surgical encounters before claim submission.",
-		},
-		GeneratedAt: time.Now(),
-	}
-}
-
-func (c *AIClient) GenerateClinicalReport(title, datasetName, orgID string) domain.AIClinicalReport {
-	if title == "" {
-		title = "CareData Clinical Intelligence Briefing"
-	}
-	if datasetName == "" {
-		datasetName = "Clinical Vitals & Encounter Benchmark Feed"
-	}
-
-	narrative := c.GenerateNarrative(datasetName)
-	reportID := fmt.Sprintf("rep-%d", time.Now().Unix())
-
-	md := fmt.Sprintf(`# %s
-**Organization:** CareData Health System  
-**Dataset:** %s  
-**Generated By:** CareData AI Intelligence Engine (Ollama Local Llama-3)  
-**Date:** %s
-
----
-
-## 1. Executive Summary
-%s
-
----
-
-## 2. Key Clinical & Operational Findings
-- %s
-- %s
-- %s
-- %s
-
----
-
-## 3. Data Quality & Profiling Scorecard
-| Metric | Benchmark Target | Current Value | Status |
-| :--- | :---: | :---: | :---: |
-| Overall Quality Index | ≥ 90.0%% | **94.6%%** | ✅ Exceeds Target |
-| Field Completeness | ≥ 95.0%% | **98.2%%** | ✅ Optimal |
-| ICD-10 Format Adherence | 100.0%% | **99.4%%** | ✅ Verified |
-| Duplicate Patient Records | < 1.0%% | **0.4%%** | ✅ Resolved |
-
----
-
-## 4. Machine Learning Risk Stratification
-- **High Risk Cohort (≥70 Score):** 14 patients (11.2%%) — Avg Readmission Probability: 87.2%%
-- **Moderate Risk Cohort (40-69 Score):** 42 patients (33.6%%) — Avg Readmission Probability: 52.4%%
-- **Low Risk Cohort (<40 Score):** 69 patients (55.2%%) — Routine Discharge Protocol
-
----
-
-## 5. Actionable AI Recommendations
-1. %s
-2. %s
-3. %s
-
----
-*Confidential — For Internal Clinical Quality & Healthcare Administration Use Only.*
-`,
-		title, datasetName, time.Now().Format("January 02, 2006"),
-		narrative.ExecutiveSummary,
-		narrative.KeyFindings[0], narrative.KeyFindings[1], narrative.KeyFindings[2], narrative.KeyFindings[3],
-		narrative.RecommendedActions[0], narrative.RecommendedActions[1], narrative.RecommendedActions[2],
-	)
-
-	return domain.AIClinicalReport{
-		ID:                 reportID,
-		OrganizationID:     orgID,
-		Title:              title,
-		DatasetName:        datasetName,
-		ExecutiveSummary:   narrative.ExecutiveSummary,
-		KeyFindings:        narrative.KeyFindings,
-		StrategicRisks:     narrative.StrategicRisks,
-		RecommendedActions: narrative.RecommendedActions,
-		MarkdownContent:    md,
-		GeneratedBy:        "CareData Local AI (Llama-3)",
-		CreatedAt:          time.Now(),
-	}
-}
+// Narrative and Report functions delegated to Python Data Engine
 
 func (c *AIClient) ReadCloserToString(rc io.ReadCloser) string {
 	defer rc.Close()

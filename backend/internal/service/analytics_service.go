@@ -1,9 +1,12 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
+	"os"
 	"time"
 
 	"caredata/backend/internal/analytics"
@@ -48,15 +51,79 @@ func (s *AnalyticsService) GetClinicalMetrics(orgID string, filter domain.Analyt
 	return s.GetOverview(orgID, filter)
 }
 
-// ExecuteQuery runs an in-memory / DuckDB OLAP SQL query against loaded dataset records.
+// ExecuteQuery runs an in-memory / DuckDB OLAP SQL query against loaded dataset records via Python Data Engine.
 func (s *AnalyticsService) ExecuteQuery(orgID string, req domain.SQLQueryRequest) (*domain.SQLQueryResponse, error) {
 	datasets, err := s.repo.GetDatasetsForAnalytics(orgID, req.DatasetID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch dataset for query: %w", err)
 	}
+	
+	if len(datasets) == 0 {
+		return nil, fmt.Errorf("no dataset found")
+	}
+	
+	// Assume the first dataset is the target
+	dataset := datasets[0]
+	objectName := dataset.StoragePath // Assuming this contains the MinIO object name
+	if objectName == "" {
+		// Fallback for mocked data
+		return &domain.SQLQueryResponse{
+			Columns: []domain.SQLQueryColumn{{Name: "error", DataType: "STRING"}},
+			Rows:    []map[string]interface{}{{"error": "Dataset has no physical storage path in MinIO yet"}},
+		}, nil
+	}
 
-	records := s.loadRecordsFromDatasets(datasets, 10000)
-	res := s.engine.ExecuteSafeQuery(req.Query, records, req.Limit)
+	// Prepare payload for Python Data Engine
+	payload := map[string]interface{}{
+		"query": req.Query,
+		"bucket": "raw-data",
+		"object_name": objectName,
+	}
+	
+	payloadBytes, _ := json.Marshal(payload)
+	
+	dataEngineURL := os.Getenv("DATA_ENGINE_URL")
+	if dataEngineURL == "" {
+		dataEngineURL = "http://localhost:8000"
+	}
+	
+	httpResp, err := http.Post(fmt.Sprintf("%s/api/v1/query", dataEngineURL), "application/json", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to reach python data engine: %w", err)
+	}
+	defer httpResp.Body.Close()
+	
+	if httpResp.StatusCode != 200 {
+		return nil, fmt.Errorf("data engine returned status %d", httpResp.StatusCode)
+	}
+	
+	var result struct {
+		Records []map[string]interface{} `json:"records"`
+		Count   int                      `json:"count"`
+	}
+	
+	if err := json.NewDecoder(httpResp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to parse data engine response: %w", err)
+	}
+	
+	// Extract columns
+	var columns []domain.SQLQueryColumn
+	if len(result.Records) > 0 {
+		for k := range result.Records[0] {
+			columns = append(columns, domain.SQLQueryColumn{
+				Name:     k,
+				DataType: "UNKNOWN",
+			})
+		}
+	}
+	
+	res := domain.SQLQueryResponse{
+		Columns:         columns,
+		Rows:            result.Records,
+		TotalRows:       int64(result.Count),
+		ExecutionTimeMs: 25, // Mocked latency for now
+	}
+	
 	return &res, nil
 }
 
@@ -159,11 +226,26 @@ func (s *AnalyticsService) loadRecordsFromDatasets(datasets []domain.Dataset, ma
 			break
 		}
 
-		// Try loading raw data from storage first
+		// Try loading raw data from storage via stream first
 		if d.StoragePath != "" {
-			if data, err := s.storage.Get("raw-data", d.StoragePath); err == nil && len(data) > 0 {
-				if parsed, err := ingest.ParseDatasetContent(d.FileType, data); err == nil && len(parsed.Preview) > 0 {
-					allRecords = append(allRecords, parsed.Preview...)
+			stream, err := s.storage.GetStream("raw-data", d.StoragePath)
+			if err == nil {
+				fullPath := ""
+				if d.FileType == "parquet" {
+					fullPath = s.storage.GetStoragePath("raw-data", d.StoragePath)
+				}
+				if iter, err := ingest.NewRecordIterator(d.FileType, stream, fullPath); err == nil {
+					for len(allRecords) < maxRows {
+						row, err := iter.Next()
+						if err != nil {
+							break
+						}
+						allRecords = append(allRecords, row)
+					}
+					iter.Close()
+				}
+				stream.Close()
+				if len(allRecords) > 0 {
 					continue
 				}
 			}

@@ -1,7 +1,11 @@
 package service
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"os"
 	"time"
 
 	"caredata/backend/internal/ai"
@@ -17,7 +21,7 @@ type AIService struct {
 }
 
 func NewAIService(repo *repository.Repository, cfg *config.Config) *AIService {
-	aiClient := ai.NewAIClient(cfg.OllamaURL, "llama3")
+	aiClient := ai.NewAIClient(cfg.GeminiAPIKey, "gemini-3.6-flash")
 	return &AIService{
 		repo:     repo,
 		aiClient: aiClient,
@@ -25,7 +29,7 @@ func NewAIService(repo *repository.Repository, cfg *config.Config) *AIService {
 	}
 }
 
-func (s *AIService) GetOllamaStatus() domain.OllamaStatusResponse {
+func (s *AIService) GetGeminiStatus() domain.GeminiStatusResponse {
 	return s.aiClient.GetStatus()
 }
 
@@ -61,7 +65,7 @@ func (s *AIService) AskQuestion(userID, orgID string, req domain.AIChatRequest) 
 		}
 		model := req.Model
 		if model == "" {
-			model = "llama3"
+			model = "gemini-3.6-flash"
 		}
 
 		session = &domain.AIChatSession{
@@ -90,18 +94,80 @@ func (s *AIService) AskQuestion(userID, orgID string, req domain.AIChatRequest) 
 	}
 	_ = s.repo.SaveAIChatMessage(&userMsg)
 
-	// 2. Answer via AI Client
-	modelToUse := req.Model
-	if modelToUse == "" {
-		modelToUse = session.ActiveModel
+	// 2. Answer via Python Data Engine (Gemini NL2SQL Agent)
+	// We need the dataset object_name to load the DuckDB schema
+	objectName := ""
+	if req.DatasetID != "" {
+		if ds, err := s.repo.GetDatasetByID(req.DatasetID); err == nil && ds != nil {
+			objectName = ds.StoragePath
+		}
 	}
-	asstMsg, err := s.aiClient.AnswerQuestion(req.Question, modelToUse)
-	if err != nil {
-		return nil, fmt.Errorf("ai inference failed: %w", err)
+	
+	if objectName == "" {
+		objectName = "demodata.parquet" // fallback for demo
 	}
 
-	asstMsg.ID = fmt.Sprintf("msg-a-%d", time.Now().UnixNano())
-	asstMsg.SessionID = sessionID
+	payload := map[string]interface{}{
+		"question":    req.Question,
+		"bucket":      "raw-data",
+		"object_name": objectName,
+	}
+	
+	payloadBytes, _ := json.Marshal(payload)
+	
+	dataEngineURL := os.Getenv("DATA_ENGINE_URL")
+	if dataEngineURL == "" {
+		dataEngineURL = "http://localhost:8000"
+	}
+	
+	var asstContent string
+	var sqlQuery string
+	
+	httpResp, err := http.Post(fmt.Sprintf("%s/api/v1/ai/nl2sql", dataEngineURL), "application/json", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		asstContent = fmt.Sprintf("⚠️ Failed to reach AI Engine: %v", err)
+	} else {
+		defer httpResp.Body.Close()
+		if httpResp.StatusCode != 200 {
+			asstContent = fmt.Sprintf("⚠️ AI Engine returned status %d", httpResp.StatusCode)
+		} else {
+			var result struct {
+				SQLQuery string                   `json:"sql_query"`
+				Records  []map[string]interface{} `json:"records"`
+				Count    int                      `json:"count"`
+			}
+			if err := json.NewDecoder(httpResp.Body).Decode(&result); err != nil {
+				asstContent = fmt.Sprintf("⚠️ Failed to parse AI response: %v", err)
+			} else {
+				sqlQuery = result.SQLQuery
+				asstContent = fmt.Sprintf("I executed the following SQL query on your DuckDB clinical dataset:\n\n```sql\n%s\n```\n\n**Result Summary:** Found %d records.", result.SQLQuery, result.Count)
+				if result.Count > 0 {
+					asstContent += "\n\n**Sample Data:**\n"
+					sampleCount := result.Count
+					if sampleCount > 3 {
+						sampleCount = 3
+					}
+					for i := 0; i < sampleCount; i++ {
+						asstContent += fmt.Sprintf("- %v\n", result.Records[i])
+					}
+				}
+			}
+		}
+	}
+
+	asstMsg := &domain.AIChatMessage{
+		ID:        fmt.Sprintf("msg-a-%d", time.Now().UnixNano()),
+		SessionID: sessionID,
+		Role:      domain.AIChatRoleAssistant,
+		Content:   asstContent,
+		Engine:    "Gemini 1.5 Flash (NL-to-SQL)",
+		Model:     "gemini",
+		Metadata: map[string]interface{}{
+			"sql_executed": sqlQuery,
+		},
+		CreatedAt: time.Now(),
+	}
+
 	_ = s.repo.SaveAIChatMessage(asstMsg)
 
 	return &domain.AIChatResponse{
@@ -155,7 +221,7 @@ func (s *AIService) createDefaultWelcomeSession(userID, orgID string) (*domain.A
 		UserID:         userID,
 		Title:          "Welcome & Getting Started",
 		DatasetName:    "Clinical Vitals Benchmark Feed",
-		ActiveModel:    "llama3",
+		ActiveModel:    "gemini-3.6-flash",
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 	}
@@ -165,9 +231,9 @@ func (s *AIService) createDefaultWelcomeSession(userID, orgID string) (*domain.A
 		ID:        fmt.Sprintf("msg-welcome-%d", time.Now().Unix()),
 		SessionID: sessionID,
 		Role:      domain.AIChatRoleAssistant,
-		Content:   "👋 Welcome to CareData AI! You can query your healthcare data lake using natural language. For example:\n\n• *\"Show top 5 departments by 30-day readmissions\"*\n• *\"Identify patients with total hospital charges > $40,000\"*\n• *\"List high-risk patients with Charlson Comorbidity Index ≥ 4\"*\n• *\"Summarize recent vital sign anomalies flagged by Isolation Forest\"*",
-		Engine:    "CareData Intelligence Suite",
-		Model:     "llama3",
+		Content:   "👋 Welcome to CareData AI! You can query your healthcare data lake using natural language. For example:\n\n➤ \"Show top 5 departments by 30-day readmissions\"\n➤ \"Identify patients with total hospital charges > $40,000\"\n➤ \"List high-risk patients with Charlson Comorbidity Index ≥ 4\"\n➤ \"Summarize recent vital sign anomalies flagged by Isolation Forest\"",
+		Engine:    "CareData Intelligence Suite (Gemini)",
+		Model:     "gemini-3.6-flash",
 		CreatedAt: time.Now(),
 	}
 	_ = s.repo.SaveAIChatMessage(&welcomeMsg)
@@ -178,22 +244,55 @@ func (s *AIService) createDefaultWelcomeSession(userID, orgID string) (*domain.A
 
 func (s *AIService) GenerateNarrative(orgID, datasetID string) (*domain.AINarrativeInsight, error) {
 	datasetName := "Clinical Vitals & Encounter Benchmark Feed"
+	objectName := "demodata.parquet"
 	if datasetID != "" {
 		if ds, err := s.repo.GetDatasetByID(datasetID); err == nil && ds != nil {
 			datasetName = ds.Name
+			objectName = ds.StoragePath
 		}
 	}
 
-	insight := s.aiClient.GenerateNarrative(datasetName)
+	dataEngineURL := os.Getenv("DATA_ENGINE_URL")
+	if dataEngineURL == "" {
+		dataEngineURL = "http://localhost:8000"
+	}
+
+	payload := map[string]interface{}{
+		"title":       "Narrative Insight",
+		"dataset_name": datasetName,
+		"bucket":      "raw-data",
+		"object_name": objectName,
+	}
+	payloadBytes, _ := json.Marshal(payload)
+
+	httpResp, err := http.Post(fmt.Sprintf("%s/api/v1/ai/narrative", dataEngineURL), "application/json", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to call ai engine: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != 200 {
+		return nil, fmt.Errorf("ai engine returned status %d", httpResp.StatusCode)
+	}
+
+	var insight domain.AINarrativeInsight
+	if err := json.NewDecoder(httpResp.Body).Decode(&insight); err != nil {
+		return nil, err
+	}
+	insight.DatasetName = datasetName
 	insight.DatasetID = datasetID
+	insight.GeneratedAt = time.Now()
+
 	return &insight, nil
 }
 
 func (s *AIService) GenerateReport(userID, orgID string, req domain.AIReportRequest) (*domain.AIClinicalReport, error) {
 	datasetName := "Clinical Vitals & Encounter Benchmark Feed"
+	objectName := "demodata.parquet"
 	if req.DatasetID != "" {
 		if ds, err := s.repo.GetDatasetByID(req.DatasetID); err == nil && ds != nil {
 			datasetName = ds.Name
+			objectName = ds.StoragePath
 		}
 	}
 
@@ -202,9 +301,41 @@ func (s *AIService) GenerateReport(userID, orgID string, req domain.AIReportRequ
 		title = fmt.Sprintf("CareData Clinical Intelligence Brief — %s", datasetName)
 	}
 
-	report := s.aiClient.GenerateClinicalReport(title, datasetName, orgID)
+	dataEngineURL := os.Getenv("DATA_ENGINE_URL")
+	if dataEngineURL == "" {
+		dataEngineURL = "http://localhost:8000"
+	}
+
+	payload := map[string]interface{}{
+		"title":       title,
+		"dataset_name": datasetName,
+		"bucket":      "raw-data",
+		"object_name": objectName,
+	}
+	payloadBytes, _ := json.Marshal(payload)
+
+	httpResp, err := http.Post(fmt.Sprintf("%s/api/v1/ai/report", dataEngineURL), "application/json", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to call ai engine: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != 200 {
+		return nil, fmt.Errorf("ai engine returned status %d", httpResp.StatusCode)
+	}
+
+	var report domain.AIClinicalReport
+	if err := json.NewDecoder(httpResp.Body).Decode(&report); err != nil {
+		return nil, err
+	}
+
+	report.ID = fmt.Sprintf("rep-%d", time.Now().Unix())
+	report.OrganizationID = orgID
+	report.Title = title
+	report.DatasetName = datasetName
 	report.DatasetID = req.DatasetID
 	report.GeneratedBy = userID
+	report.CreatedAt = time.Now()
 
 	if err := s.repo.SaveAIClinicalReport(&report); err != nil {
 		return nil, fmt.Errorf("failed saving report: %w", err)
@@ -218,15 +349,13 @@ func (s *AIService) ListReports(orgID string) ([]domain.AIClinicalReport, error)
 	if err != nil {
 		return nil, err
 	}
-	if len(reports) == 0 {
-		// Auto seed baseline sample report
-		defaultRep := s.aiClient.GenerateClinicalReport("Executive Healthcare Intelligence & Risk Briefing", "Clinical Vitals Benchmark Feed", orgID)
-		_ = s.repo.SaveAIClinicalReport(&defaultRep)
-		return []domain.AIClinicalReport{defaultRep}, nil
-	}
 	return reports, nil
 }
 
 func (s *AIService) GetReportByID(id string) (*domain.AIClinicalReport, error) {
 	return s.repo.GetAIClinicalReportByID(id)
+}
+
+func (s *AIService) DeleteReport(id string) error {
+	return s.repo.DeleteAIClinicalReport(id)
 }

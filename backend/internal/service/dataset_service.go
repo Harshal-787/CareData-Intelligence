@@ -1,8 +1,10 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"time"
 
@@ -29,9 +31,9 @@ func NewDatasetService(repo *repository.Repository, store storage.Storage, cfg *
 	}
 }
 
-func (s *DatasetService) UploadAndIngest(orgID, userID, userEmail, ipAddress, name, filename string, data []byte) (*domain.DatasetResponse, error) {
-	if len(data) == 0 {
-		return nil, fmt.Errorf("uploaded file is empty")
+func (s *DatasetService) UploadAndIngest(orgID, userID, userEmail, ipAddress, name, filename string, reader io.Reader) (*domain.DatasetResponse, error) {
+	if reader == nil {
+		return nil, fmt.Errorf("uploaded reader is nil")
 	}
 
 	datasetID := fmt.Sprintf("ds-%s", uuid.New().String()[:12])
@@ -39,12 +41,12 @@ func (s *DatasetService) UploadAndIngest(orgID, userID, userEmail, ipAddress, na
 		name = filename
 	}
 
-	mimeType := storage.DetectMimeType(filename, data)
+	mimeType := storage.DetectMimeType(filename, nil)
 	fileType := storage.DetectFileType(filename)
 	storageKey := storage.FormatStorageKey(orgID, datasetID, filename)
 
-	// 1. Store raw file in lakehouse storage
-	storagePath, err := s.storage.Save("raw-data", storageKey, data, mimeType)
+	// 1. Store raw file in lakehouse storage using stream
+	storagePath, err := s.storage.SaveStream("raw-data", storageKey, reader, mimeType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store raw dataset: %w", err)
 	}
@@ -56,7 +58,6 @@ func (s *DatasetService) UploadAndIngest(orgID, userID, userEmail, ipAddress, na
 		UploadedBy:     userID,
 		Name:           name,
 		FileName:       filename,
-		FileSize:       int64(len(data)),
 		MimeType:       mimeType,
 		FileType:       fileType,
 		StoragePath:    storagePath,
@@ -73,14 +74,34 @@ func (s *DatasetService) UploadAndIngest(orgID, userID, userEmail, ipAddress, na
 		return nil, fmt.Errorf("failed to register dataset record: %w", err)
 	}
 
-	// 2. Run Ingestion Parser & Schema Inference
-	parseRes, parseErr := ingest.ParseDatasetContent(fileType, data)
-	if parseErr != nil {
-		log.Printf("⚠️ Ingestion parsing warning for dataset %s: %v", datasetID, parseErr)
-		_ = s.repo.UpdateDatasetStatusAndSchema(datasetID, domain.DatasetStatusFailed, 0, 0, "[]", "[]", 0, parseErr.Error())
+	// 2. Run Ingestion Parser & Schema Inference via Stream
+	stream, err := s.storage.GetStream("raw-data", storagePath)
+	if err != nil {
+		log.Printf("⚠️ Failed to open dataset stream for parsing %s: %v", datasetID, err)
+		_ = s.repo.UpdateDatasetStatusAndSchema(datasetID, domain.DatasetStatusFailed, 0, 0, "[]", "[]", 0, err.Error())
 		dataset.Status = domain.DatasetStatusFailed
-		dataset.ErrorMessage = parseErr.Error()
+		dataset.ErrorMessage = err.Error()
 	} else {
+		defer stream.Close()
+		fullPath := s.storage.GetStoragePath("raw-data", storagePath)
+		if fileType != "parquet" {
+			fullPath = ""
+		}
+		iter, err := ingest.NewRecordIterator(fileType, stream, fullPath)
+		if err != nil {
+			log.Printf("⚠️ Failed to initialize iterator for %s: %v", datasetID, err)
+			_ = s.repo.UpdateDatasetStatusAndSchema(datasetID, domain.DatasetStatusFailed, 0, 0, "[]", "[]", 0, err.Error())
+			dataset.Status = domain.DatasetStatusFailed
+			dataset.ErrorMessage = err.Error()
+		} else {
+			defer iter.Close()
+			parseRes, parseErr := ingest.ParseDatasetStream(fileType, iter)
+			if parseErr != nil {
+				log.Printf("⚠️ Ingestion parsing warning for dataset %s: %v", datasetID, parseErr)
+				_ = s.repo.UpdateDatasetStatusAndSchema(datasetID, domain.DatasetStatusFailed, 0, 0, "[]", "[]", 0, parseErr.Error())
+				dataset.Status = domain.DatasetStatusFailed
+				dataset.ErrorMessage = parseErr.Error()
+			} else {
 		schemaBytes, _ := json.Marshal(parseRes.Schema)
 		previewBytes, _ := json.Marshal(parseRes.Preview)
 
@@ -108,9 +129,12 @@ func (s *DatasetService) UploadAndIngest(orgID, userID, userEmail, ipAddress, na
 			for _, r := range defaultRules {
 				_ = s.repo.CreateValidationRule(&r)
 			}
-			columnProfiles := quality.ProfileDataset(sc, pr)
+			iter1 := ingest.NewMemoryIterator(pr)
+			columnProfiles := quality.ProfileDataset(sc, iter1)
 			profJSON, _ := json.Marshal(columnProfiles)
-			valRes := quality.EvaluateQualityAndRules(dsID, oID, sc, pr, defaultRules)
+			
+			iter2 := ingest.NewMemoryIterator(pr)
+			valRes := quality.EvaluateQualityAndRules(dsID, oID, sc, iter2, defaultRules)
 			reportID := fmt.Sprintf("qr-%s", uuid.New().String()[:12])
 			rep := &domain.QualityReport{
 				ID:                reportID,
@@ -137,6 +161,8 @@ func (s *DatasetService) UploadAndIngest(orgID, userID, userEmail, ipAddress, na
 			_ = s.repo.SaveQualityReport(rep)
 			_ = s.repo.SaveQualityViolations(valRes.Violations)
 		}(datasetID, orgID, parseRes.Schema, parseRes.Preview)
+			}
+		}
 	}
 
 	// 3. Record Audit Log
@@ -147,7 +173,7 @@ func (s *DatasetService) UploadAndIngest(orgID, userID, userEmail, ipAddress, na
 		UserEmail:      userEmail,
 		Action:         "DATASET_UPLOAD",
 		Resource:       fmt.Sprintf("dataset:%s", datasetID),
-		Details:        fmt.Sprintf("Ingested dataset '%s' (%s, %d bytes, %d records, status: %s)", name, fileType, len(data), dataset.TotalRecords, dataset.Status),
+		Details:        fmt.Sprintf("Ingested dataset '%s' (%s, %d records, status: %s)", name, fileType, dataset.TotalRecords, dataset.Status),
 		IPAddress:      ipAddress,
 		CreatedAt:      now,
 	})
@@ -174,7 +200,7 @@ func (s *DatasetService) GenerateSampleDataset(orgID, userID, userEmail, ipAddre
 		name = "Inpatient & Emergency Clinical Encounters"
 	}
 
-	return s.UploadAndIngest(orgID, userID, userEmail, ipAddress, name, filename, data)
+	return s.UploadAndIngest(orgID, userID, userEmail, ipAddress, name, filename, bytes.NewReader(data))
 }
 
 func (s *DatasetService) ListDatasets(filter domain.DatasetFilterParams) ([]domain.DatasetResponse, error) {

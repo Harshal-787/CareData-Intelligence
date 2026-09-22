@@ -5,28 +5,26 @@ import { DashboardLayout } from "../layouts/DashboardLayout";
 import { ProtectedRoute } from "./ProtectedRoute";
 
 // Pages
-import { LandingPage } from "../pages/landing/LandingPage";
-import { Login } from "../pages/auth/Login";
-import { Register } from "../pages/auth/Register";
-import { DashboardHome } from "../pages/dashboard/Home";
-import { UsersAdmin } from "../pages/admin/Users";
-import { AuditLogsAdmin } from "../pages/admin/AuditLogs";
-import { DatasetsPage } from "../pages/datasets/Datasets";
-import { QualityPage } from "../pages/quality/QualityPage";
-import { DeduplicationPage } from "../pages/deduplication/DeduplicationPage";
-import { AnalyticsPage } from "../pages/analytics/AnalyticsPage";
-import { MLPredictionsPage } from "../pages/ml/MLPredictionsPage";
-import { AIInsightsPage } from "../pages/ai/AIInsightsPage";
-import { PipelinePage } from "../pages/pipelines/PipelinePage";
-import { ReportsPage } from "../pages/reports/ReportsPage";
-import { StreamingPage } from "../pages/streaming/StreamingPage";
+import { Login } from "../features/auth/Login";
+import { Register } from "../features/auth/Register";
+import { DashboardHome } from "../features/dashboard/Home";
+import { UsersAdmin } from "../features/admin/Users";
+import { AuditLogsAdmin } from "../features/admin/AuditLogs";
+import { DatasetsPage } from "../features/datasets/Datasets";
+import { QualityPage } from "../features/quality/QualityPage";
+import { DeduplicationPage } from "../features/deduplication/DeduplicationPage";
+import { AnalyticsPage } from "../features/analytics/AnalyticsPage";
+import { MLPredictionsPage } from "../features/ml/MLPredictionsPage";
+import { AIInsightsPage } from "../features/ai/AIInsightsPage";
+import { PipelinePage } from "../features/pipelines/PipelinePage";
+import { ReportsPage } from "../features/reports/ReportsPage";
+import { StreamingPage } from "../features/streaming/StreamingPage";
 
 export const AppRoutes: React.FC = () => {
   return (
     <Routes>
-      {/* Public Landing Page */}
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/landing" element={<LandingPage />} />
+      {/* Root redirects to login */}
+      <Route path="/" element={<Navigate to="/login" replace />} />
 
       {/* Public Auth Routes */}
       <Route element={<AuthLayout />}>
@@ -79,7 +77,8 @@ export const AppRoutes: React.FC = () => {
       </Route>
 
       {/* Fallback */}
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
 };
+

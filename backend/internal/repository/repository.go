@@ -533,29 +533,38 @@ func (r *Repository) ListQualityViolations(datasetID, severity string, limit, of
 		limit = 50
 	}
 
+	latestReport, err := r.GetLatestQualityReport(datasetID)
+	if err != nil {
+		return nil, 0, err
+	}
+	if latestReport == nil {
+		return nil, 0, nil
+	}
+	reportID := latestReport.ID
+
 	var countQuery string
 	var listQuery string
 	var countArgs []interface{}
 	var listArgs []interface{}
 
 	if severity != "" {
-		countQuery = "SELECT COUNT(*) FROM quality_violations WHERE dataset_id = $1 AND severity = $2"
-		listQuery = "SELECT id, quality_report_id, dataset_id, row_number, field_name, rule_type, severity, invalid_value, message, created_at FROM quality_violations WHERE dataset_id = $1 AND severity = $2 ORDER BY row_number ASC LIMIT $3 OFFSET $4"
+		countQuery = "SELECT COUNT(*) FROM quality_violations WHERE quality_report_id = $1 AND severity = $2"
+		listQuery = "SELECT id, quality_report_id, dataset_id, row_number, field_name, rule_type, severity, invalid_value, message, created_at FROM quality_violations WHERE quality_report_id = $1 AND severity = $2 ORDER BY row_number ASC LIMIT $3 OFFSET $4"
 		if r.db.Driver == "sqlite3" {
-			countQuery = "SELECT COUNT(*) FROM quality_violations WHERE dataset_id = ? AND severity = ?"
-			listQuery = "SELECT id, quality_report_id, dataset_id, row_number, field_name, rule_type, severity, invalid_value, message, created_at FROM quality_violations WHERE dataset_id = ? AND severity = ? ORDER BY row_number ASC LIMIT ? OFFSET ?"
+			countQuery = "SELECT COUNT(*) FROM quality_violations WHERE quality_report_id = ? AND severity = ?"
+			listQuery = "SELECT id, quality_report_id, dataset_id, row_number, field_name, rule_type, severity, invalid_value, message, created_at FROM quality_violations WHERE quality_report_id = ? AND severity = ? ORDER BY row_number ASC LIMIT ? OFFSET ?"
 		}
-		countArgs = []interface{}{datasetID, severity}
-		listArgs = []interface{}{datasetID, severity, limit, offset}
+		countArgs = []interface{}{reportID, severity}
+		listArgs = []interface{}{reportID, severity, limit, offset}
 	} else {
-		countQuery = "SELECT COUNT(*) FROM quality_violations WHERE dataset_id = $1"
-		listQuery = "SELECT id, quality_report_id, dataset_id, row_number, field_name, rule_type, severity, invalid_value, message, created_at FROM quality_violations WHERE dataset_id = $1 ORDER BY row_number ASC LIMIT $2 OFFSET $3"
+		countQuery = "SELECT COUNT(*) FROM quality_violations WHERE quality_report_id = $1"
+		listQuery = "SELECT id, quality_report_id, dataset_id, row_number, field_name, rule_type, severity, invalid_value, message, created_at FROM quality_violations WHERE quality_report_id = $1 ORDER BY row_number ASC LIMIT $2 OFFSET $3"
 		if r.db.Driver == "sqlite3" {
-			countQuery = "SELECT COUNT(*) FROM quality_violations WHERE dataset_id = ?"
-			listQuery = "SELECT id, quality_report_id, dataset_id, row_number, field_name, rule_type, severity, invalid_value, message, created_at FROM quality_violations WHERE dataset_id = ? ORDER BY row_number ASC LIMIT ? OFFSET ?"
+			countQuery = "SELECT COUNT(*) FROM quality_violations WHERE quality_report_id = ?"
+			listQuery = "SELECT id, quality_report_id, dataset_id, row_number, field_name, rule_type, severity, invalid_value, message, created_at FROM quality_violations WHERE quality_report_id = ? ORDER BY row_number ASC LIMIT ? OFFSET ?"
 		}
-		countArgs = []interface{}{datasetID}
-		listArgs = []interface{}{datasetID, limit, offset}
+		countArgs = []interface{}{reportID}
+		listArgs = []interface{}{reportID, limit, offset}
 	}
 
 	var total int64
@@ -2159,6 +2168,15 @@ func (r *Repository) SaveAIClinicalReport(rep *domain.AIClinicalReport) error {
 		string(findingsJSON), string(risksJSON), string(recsJSON), rep.MarkdownContent,
 		rep.GeneratedBy, rep.CreatedAt,
 	)
+	return err
+}
+
+func (r *Repository) DeleteAIClinicalReport(id string) error {
+	query := `DELETE FROM ai_clinical_reports WHERE id = $1`
+	if r.db.Driver == "sqlite3" {
+		query = `DELETE FROM ai_clinical_reports WHERE id = ?`
+	}
+	_, err := r.db.Exec(query, id)
 	return err
 }
 

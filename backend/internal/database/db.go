@@ -10,7 +10,6 @@ import (
 	"caredata/backend/internal/domain"
 
 	_ "github.com/lib/pq"
-	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -28,36 +27,21 @@ func Connect(driver, source string) (*DB, error) {
 	}
 
 	db, err := sql.Open(driver, source)
-	if err == nil {
-		if pingErr := db.Ping(); pingErr == nil {
-			dbInstance := &DB{DB: db, Driver: driver}
-			if err := dbInstance.migrate(); err != nil {
-				return nil, fmt.Errorf("migration failed: %w", err)
-			}
-			_ = dbInstance.seedDemoData()
-			log.Printf("✓ Connected to primary database: %s", driver)
-			return dbInstance, nil
-		} else {
-			log.Printf("⚠️ Notice: Could not connect to %s (%v). Falling back to local development SQLite database...", driver, pingErr)
-			_ = db.Close()
-		}
-	}
-
-	// Fallback to SQLite
-	sqliteDB, err := sql.Open("sqlite3", "./caredata.db")
 	if err != nil {
-		return nil, fmt.Errorf("failed to open fallback SQLite database: %w", err)
-	}
-	if err := sqliteDB.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping fallback SQLite database: %w", err)
+		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	dbInstance := &DB{DB: sqliteDB, Driver: "sqlite3"}
+	if pingErr := db.Ping(); pingErr != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("could not connect to %s: %w", driver, pingErr)
+	}
+	
+	dbInstance := &DB{DB: db, Driver: driver}
 	if err := dbInstance.migrate(); err != nil {
-		return nil, fmt.Errorf("migration failed on SQLite: %w", err)
+		return nil, fmt.Errorf("migration failed: %w", err)
 	}
 	_ = dbInstance.seedDemoData()
-	log.Printf("✓ Initialized local fallback SQLite database (./caredata.db)")
+	log.Printf("✓ Connected to primary database: %s", driver)
 	return dbInstance, nil
 }
 
@@ -357,7 +341,7 @@ func (d *DB) migrate() error {
 			rows_json TEXT NOT NULL DEFAULT '[]',
 			row_count INTEGER NOT NULL DEFAULT 0,
 			execution_time_ms REAL NOT NULL DEFAULT 0.0,
-			engine TEXT NOT NULL DEFAULT 'Ollama Local LLM',
+			engine TEXT NOT NULL DEFAULT 'Google Gemini LLM',
 			model TEXT NOT NULL DEFAULT 'llama3',
 			created_at TIMESTAMP NOT NULL,
 			FOREIGN KEY (session_id) REFERENCES ai_chat_sessions(id) ON DELETE CASCADE
@@ -409,7 +393,8 @@ func (d *DB) seedDemoData() error {
 	var count int
 	err := d.QueryRow("SELECT COUNT(*) FROM organizations WHERE slug = 'caredata-health'").Scan(&count)
 	if err == nil && count > 0 {
-		return nil // Already seeded
+		log.Println("Organization already exists, but ensuring users are seeded anyway.")
+		// We deliberately do not return here to ensure user accounts exist!
 	}
 
 	orgID := "org-default-001"

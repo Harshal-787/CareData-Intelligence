@@ -207,6 +207,7 @@ func main() {
 			r.Post("/ai/reports/generate", aiH.GenerateReport)
 			r.Get("/ai/reports", aiH.ListReports)
 			r.Get("/ai/reports/{id}", aiH.GetReport)
+			r.Delete("/ai/reports/{id}", aiH.DeleteReport)
 
 			// Phase 8: Pipeline Orchestration & Execution Management
 			r.Get("/pipelines/stats", pipelineH.GetStats)

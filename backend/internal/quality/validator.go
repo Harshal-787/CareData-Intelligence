@@ -3,6 +3,7 @@ package quality
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"regexp"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"caredata/backend/internal/domain"
+	"caredata/backend/internal/ingest"
 	"github.com/google/uuid"
 )
 
@@ -40,27 +42,45 @@ type ValidationResult struct {
 	InfoCount         int64
 }
 
-// EvaluateQualityAndRules evaluates active validation rules across dataset rows and produces a quality report.
-func EvaluateQualityAndRules(datasetID, orgID string, schema []domain.DatasetColumn, rows []map[string]interface{}, rules []domain.ValidationRule) *ValidationResult {
+func EvaluateQualityAndRules(datasetID, orgID string, schema []domain.DatasetColumn, iter ingest.RecordIterator, rules []domain.ValidationRule) *ValidationResult {
 	result := &ValidationResult{
 		Violations: make([]domain.QualityViolation, 0),
 	}
 
-	totalRows := int64(len(rows))
-	if totalRows == 0 {
-		result.OverallScore = 100.0
-		result.CompletenessScore = 100.0
-		result.ValidityScore = 100.0
-		result.UniquenessScore = 100.0
-		result.ConsistencyScore = 100.0
-		return result
-	}
-
-	// 1. Completeness Evaluation
 	var totalCells int64
 	var populatedCells int64
+	var totalRows int64
 
-	for _, row := range rows {
+	var idColumn string
+	for _, col := range schema {
+		lowerName := strings.ToLower(col.Name)
+		if lowerName == "id" || lowerName == "patient_id" || lowerName == "mrn" || lowerName == "encounter_id" {
+			idColumn = col.Name
+			break
+		}
+	}
+	seenIDs := make(map[string]struct{})
+
+	var ruleChecksTotal int64
+	var ruleChecksPassed int64
+	var consistencyChecksTotal int64
+	var consistencyChecksPassed int64
+
+	const maxViolations = 500
+
+	for {
+		row, err := iter.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			continue // Skip unparseable row
+		}
+		
+		totalRows++
+		rowNum := totalRows
+
+		// 1. Completeness
 		for _, col := range schema {
 			totalCells++
 			val, exists := row[col.Name]
@@ -71,50 +91,18 @@ func EvaluateQualityAndRules(datasetID, orgID string, schema []domain.DatasetCol
 				}
 			}
 		}
-	}
 
-	if totalCells > 0 {
-		result.CompletenessScore = math.Round((float64(populatedCells)/float64(totalCells))*10000) / 100
-	} else {
-		result.CompletenessScore = 100.0
-	}
-
-	// 2. Uniqueness Evaluation (Check for ID columns or full-row uniqueness)
-	var idColumn string
-	for _, col := range schema {
-		lowerName := strings.ToLower(col.Name)
-		if lowerName == "id" || lowerName == "patient_id" || lowerName == "mrn" || lowerName == "encounter_id" {
-			idColumn = col.Name
-			break
-		}
-	}
-
-	if idColumn != "" {
-		seenIDs := make(map[string]int)
-		for _, row := range rows {
+		// 2. Uniqueness
+		if idColumn != "" {
 			if val, ok := row[idColumn]; ok && val != nil {
 				strVal := strings.TrimSpace(fmt.Sprintf("%v", val))
 				if strVal != "" {
-					seenIDs[strVal]++
+					seenIDs[strVal] = struct{}{}
 				}
 			}
 		}
-		if totalRows > 0 {
-			result.UniquenessScore = math.Round((float64(len(seenIDs))/float64(totalRows))*10000) / 100
-		}
-	} else {
-		result.UniquenessScore = 98.5
-	}
 
-	// 3. Clinical & Configured Rules Validation
-	var ruleChecksTotal int64
-	var ruleChecksPassed int64
-	var consistencyChecksTotal int64
-	var consistencyChecksPassed int64
-
-	for rIdx, row := range rows {
-		rowNum := int64(rIdx + 1)
-
+		// 3. Rules
 		for _, rule := range rules {
 			if !rule.IsActive {
 				continue
@@ -133,31 +121,55 @@ func EvaluateQualityAndRules(datasetID, orgID string, schema []domain.DatasetCol
 					consistencyChecksPassed++
 				}
 			} else {
-				// Record violation
-				violation := domain.QualityViolation{
-					ID:           fmt.Sprintf("viol-%s", uuid.New().String()[:12]),
-					DatasetID:    datasetID,
-					RowNumber:    rowNum,
-					FieldName:    rule.FieldName,
-					RuleType:     rule.RuleType,
-					Severity:     rule.Severity,
-					InvalidValue: invalidVal,
-					Message:      violationMsg,
-					CreatedAt:    time.Now(),
+				// Record violation if under limit
+				if len(result.Violations) < maxViolations {
+					violation := domain.QualityViolation{
+						ID:           fmt.Sprintf("viol-%s", uuid.New().String()[:12]),
+						DatasetID:    datasetID,
+						RowNumber:    rowNum,
+						FieldName:    rule.FieldName,
+						RuleType:     rule.RuleType,
+						Severity:     rule.Severity,
+						InvalidValue: invalidVal,
+						Message:      violationMsg,
+						CreatedAt:    time.Now(),
+					}
+					result.Violations = append(result.Violations, violation)
 				}
-
-				result.Violations = append(result.Violations, violation)
-
-				switch rule.Severity {
-				case domain.SeverityCritical:
+				
+				// Track counts even if violation array is capped
+				if rule.Severity == domain.SeverityCritical {
 					result.CriticalCount++
-				case domain.SeverityWarning:
+				} else if rule.Severity == domain.SeverityWarning {
 					result.WarningCount++
-				case domain.SeverityInfo:
+				} else {
 					result.InfoCount++
 				}
 			}
 		}
+	}
+
+	if totalRows == 0 {
+		result.OverallScore = 100.0
+		result.CompletenessScore = 100.0
+		result.ValidityScore = 100.0
+		result.UniquenessScore = 100.0
+		result.ConsistencyScore = 100.0
+		return result
+	}
+
+	if totalCells > 0 {
+		result.CompletenessScore = math.Round((float64(populatedCells)/float64(totalCells))*10000) / 100
+	} else {
+		result.CompletenessScore = 100.0
+	}
+
+	if idColumn != "" {
+		if totalRows > 0 {
+			result.UniquenessScore = math.Round((float64(len(seenIDs))/float64(totalRows))*10000) / 100
+		}
+	} else {
+		result.UniquenessScore = 98.5
 	}
 
 	result.TotalChecks = ruleChecksTotal

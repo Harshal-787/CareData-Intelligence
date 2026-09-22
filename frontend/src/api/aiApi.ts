@@ -1,6 +1,6 @@
 import api from './client';
 import {
-  OllamaStatusResponse,
+  GeminiStatusResponse,
   AIChatRequest,
   AIChatResponse,
   AIChatSession,
@@ -9,8 +9,8 @@ import {
   AIReportRequest,
 } from '../types/ai';
 
-export const fetchOllamaStatus = async (): Promise<OllamaStatusResponse> => {
-  const response = await api.get<OllamaStatusResponse>('/ai/status');
+export const fetchGeminiStatus = async (): Promise<GeminiStatusResponse> => {
+  const response = await api.get<GeminiStatusResponse>('/ai/status');
   return response.data;
 };
 
@@ -60,5 +60,10 @@ export const fetchAIReports = async (): Promise<AIClinicalReport[]> => {
 
 export const fetchAIReportById = async (id: string): Promise<AIClinicalReport> => {
   const response = await api.get<AIClinicalReport>(`/ai/reports/${id}`);
+  return response.data;
+};
+
+export const deleteAIReport = async (id: string): Promise<{ message: string }> => {
+  const response = await api.delete(`/ai/reports/${id}`);
   return response.data;
 };

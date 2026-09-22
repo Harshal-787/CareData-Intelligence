@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -57,12 +56,6 @@ func (h *DatasetHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	fileBytes, err := io.ReadAll(file)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to read uploaded file stream")
-		return
-	}
-
 	customName := strings.TrimSpace(r.FormValue("name"))
 	if customName == "" {
 		customName = header.Filename
@@ -80,7 +73,7 @@ func (h *DatasetHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		ipAddress,
 		customName,
 		header.Filename,
-		fileBytes,
+		file,
 	)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())

@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -44,21 +43,20 @@ func (s *MLService) ensureSeedData() {
 	// Fetch first ready dataset
 	datasets, err := s.repo.ListDatasets(domain.DatasetFilterParams{})
 	if err != nil || len(datasets) == 0 {
-		// Generate demo dataset seed
-		modelRun, anomalies, riskScores := s.engine.GenerateSyntheticDemoData("demo-seed-ds", "Clinical Vitals & Encounter Benchmark Feed", "org-default-001")
-		_ = s.repo.SaveMLModelRun(modelRun)
-		_ = s.repo.SaveMLAnomalies(anomalies)
-		_ = s.repo.SaveMLRiskScores(riskScores)
-		log.Println("✓ Seeded baseline Phase 6 Machine Learning runs, anomalies, and risk scores")
-		return
+		return // No datasets to run ML on
 	}
 
 	targetDs := datasets[0]
-	modelRun, anomalies, riskScores := s.engine.GenerateSyntheticDemoData(targetDs.ID, targetDs.Name, targetDs.OrganizationID)
-	_ = s.repo.SaveMLModelRun(modelRun)
-	_ = s.repo.SaveMLAnomalies(anomalies)
-	_ = s.repo.SaveMLRiskScores(riskScores)
-	log.Printf("✓ Initialized ML Intelligence baseline for dataset: %s", targetDs.Name)
+	if targetDs.StoragePath == "" {
+		return
+	}
+	modelRun, anomalies, riskScores, _ := s.engine.RunPipeline(targetDs.ID, targetDs.Name, targetDs.OrganizationID, targetDs.StoragePath, 0.08, 100)
+	if modelRun != nil {
+		_ = s.repo.SaveMLModelRun(modelRun)
+		_ = s.repo.SaveMLAnomalies(anomalies)
+		_ = s.repo.SaveMLRiskScores(riskScores)
+		log.Printf("✓ Initialized ML Intelligence baseline for dataset: %s", targetDs.Name)
+	}
 }
 
 func (s *MLService) GetOverview(orgID, datasetID string) (*domain.MLOverviewResponse, error) {
@@ -132,24 +130,8 @@ func (s *MLService) TriggerMLRun(datasetID, orgID string, req domain.MLTrainRequ
 		return nil, fmt.Errorf("dataset not found")
 	}
 
-	var records []map[string]interface{}
-	if len(ds.PreviewJSON) > 0 {
-		_ = json.Unmarshal([]byte(ds.PreviewJSON), &records)
-	}
-
-	// If no records in preview, build sample synthetic batch
-	if len(records) < 5 {
-		run, anoms, risks := s.engine.GenerateSyntheticDemoData(ds.ID, ds.Name, ds.OrganizationID)
-		if req.Contamination > 0 {
-			run.Contamination = req.Contamination
-		}
-		if req.NEstimators > 0 {
-			run.NEstimators = req.NEstimators
-		}
-		_ = s.repo.SaveMLModelRun(run)
-		_ = s.repo.SaveMLAnomalies(anoms)
-		_ = s.repo.SaveMLRiskScores(risks)
-		return run, nil
+	if ds.StoragePath == "" {
+		return nil, fmt.Errorf("dataset has no physical storage path in MinIO")
 	}
 
 	contamination := req.Contamination
@@ -161,7 +143,7 @@ func (s *MLService) TriggerMLRun(datasetID, orgID string, req domain.MLTrainRequ
 		nEstimators = 100
 	}
 
-	modelRun, anomalies, riskScores, err := s.engine.RunPipeline(records, contamination, nEstimators, ds.ID, ds.Name, orgID)
+	modelRun, anomalies, riskScores, err := s.engine.RunPipeline(ds.ID, ds.Name, orgID, ds.StoragePath, contamination, nEstimators)
 	if err != nil {
 		return nil, fmt.Errorf("ml inference failed: %w", err)
 	}
