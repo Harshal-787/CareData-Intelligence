@@ -38,20 +38,31 @@ func (s *DedupeService) RunDeduplication(datasetID, orgID string, dedupeConfig d
 		return nil, nil, fmt.Errorf("dataset not found")
 	}
 
-	// 1. Fetch raw data from storage
-	data, err := s.storage.Get("raw-data", dataset.StoragePath)
+	// 1. Open raw data stream from storage
+	stream, err := s.storage.GetStream("raw-data", dataset.StoragePath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load dataset file: %w", err)
+		return nil, nil, fmt.Errorf("failed to open dataset stream: %w", err)
 	}
+	defer stream.Close()
 
-	// 2. Parse all data rows (supporting full files rather than just 20 preview rows)
-	allRows, err := ingest.ParseDatasetAllRows(dataset.FileType, data)
-	if err != nil || len(allRows) == 0 {
-		parseRes, parseErr := ingest.ParseDatasetContent(dataset.FileType, data)
-		if parseErr != nil {
-			return nil, nil, fmt.Errorf("failed to parse dataset rows: %w", parseErr)
+	// 2. Stream and parse rows
+	fullPath := ""
+	if dataset.FileType == "parquet" {
+		fullPath = s.storage.GetStoragePath("raw-data", dataset.StoragePath)
+	}
+	iter, err := ingest.NewRecordIterator(dataset.FileType, stream, fullPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	var allRows []map[string]interface{}
+	for {
+		row, err := iter.Next()
+		if err != nil {
+			break
 		}
-		allRows = parseRes.Preview
+		allRows = append(allRows, row)
 	}
 
 	// 3. Setup default configuration if not provided

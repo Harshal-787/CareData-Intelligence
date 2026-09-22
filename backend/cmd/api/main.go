@@ -14,6 +14,7 @@ import (
 	"caredata/backend/internal/handler"
 	"caredata/backend/internal/middleware"
 	"caredata/backend/internal/mllp"
+	"caredata/backend/internal/queue"
 	"caredata/backend/internal/repository"
 	"caredata/backend/internal/service"
 	"caredata/backend/internal/storage"
@@ -80,7 +81,14 @@ func main() {
 	analyticsService := service.NewAnalyticsService(repo, store, cfg)
 	mlService := service.NewMLService(repo, store, cfg)
 	aiService := service.NewAIService(repo, cfg)
-	pipelineService := service.NewPipelineService(repo, pipelineRepo, store, cfg)
+
+	redisHost := os.Getenv("REDIS_HOST")
+	if redisHost == "" {
+		redisHost = "localhost"
+	}
+	redisQueue := queue.NewRedisQueue(redisHost+":6379", "", 0)
+
+	pipelineService := service.NewPipelineService(repo, pipelineRepo, store, cfg, redisQueue)
 	streamSvc = service.NewStreamService(repo, streamHub, mllpServer, cfg)
 
 	h := handler.NewHandler(authService, repo, pipelineRepo)
@@ -120,7 +128,13 @@ func main() {
 		// Public Auth Endpoints
 		r.Post("/auth/login", h.Login)
 		r.Post("/auth/register", h.Register)
+		r.Post("/auth/register/user", h.RegisterUser)
 		r.Post("/auth/refresh", h.Refresh)
+
+		// Internal Endpoints (for python worker webhooks)
+		r.Route("/internal", func(r chi.Router) {
+			r.Post("/pipeline/progress", pipelineH.UpdateProgressInternal)
+		})
 
 		// Phase 9: Real-Time Stream WebSocket Connection
 		r.Get("/stream/ws", streamH.WebSocket)
@@ -182,8 +196,8 @@ func main() {
 			r.Get("/ml/models", mlH.ListModels)
 			r.Post("/datasets/{id}/ml/run", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(mlH.TriggerMLRun)).ServeHTTP)
 
-			// Phase 7: Local AI, Natural Language Analytics & Smart Reporting (Ollama)
-			r.Get("/ai/status", aiH.GetOllamaStatus)
+			// Phase 7: Local AI, Natural Language Analytics & Smart Reporting (Gemini)
+			r.Get("/ai/status", aiH.GetGeminiStatus)
 			r.Post("/ai/models/select", aiH.SelectModel)
 			r.Post("/ai/chat", aiH.Chat)
 			r.Get("/ai/chat/history", aiH.GetHistory)
@@ -193,6 +207,7 @@ func main() {
 			r.Post("/ai/reports/generate", aiH.GenerateReport)
 			r.Get("/ai/reports", aiH.ListReports)
 			r.Get("/ai/reports/{id}", aiH.GetReport)
+			r.Delete("/ai/reports/{id}", aiH.DeleteReport)
 
 			// Phase 8: Pipeline Orchestration & Execution Management
 			r.Get("/pipelines/stats", pipelineH.GetStats)

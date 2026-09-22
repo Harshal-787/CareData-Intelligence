@@ -1,75 +1,99 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import { ShieldCheck, Database, BrainCircuit } from 'lucide-react';
 import { BrandLogo } from '../components/common/BrandLogo';
 
 export const AuthLayout: React.FC = () => {
   return (
-    <div className="flex min-h-screen bg-[#0b0f19] text-slate-100">
-      {/* Left Marketing / Vision Panel */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 bg-gradient-to-br from-[#083344] via-[#0f172a] to-[#05070e] border-r border-slate-800/80 relative overflow-hidden">
-        <div className="absolute top-0 right-0 -mr-20 -mt-20 h-96 w-96 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 h-96 w-96 rounded-full bg-blue-600/10 blur-3xl pointer-events-none" />
+    <main className="min-h-screen flex text-slate-900 bg-white">
+      <div className="flex w-full">
+        
+        {/* Left Side: Brand & Visuals */}
+        <section className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-[#050B14] p-12 text-white lg:flex border-r border-slate-800/50">
+          
+          {/* Animated Background SVG (Data Streams / Network) */}
+          <div className="absolute inset-0 z-0 opacity-40">
+            <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#0284c7" stopOpacity="0.1" />
+                  <stop offset="50%" stopColor="#0891b2" stopOpacity="0.3" />
+                  <stop offset="100%" stopColor="#0284c7" stopOpacity="0.1" />
+                </linearGradient>
+                <linearGradient id="grad2" x1="100%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.1" />
+                  <stop offset="50%" stopColor="#06b6d4" stopOpacity="0.2" />
+                  <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.1" />
+                </linearGradient>
+                <filter id="blur">
+                  <feGaussianBlur stdDeviation="10" />
+                </filter>
+              </defs>
+              
+              {/* Animated Aurora Orbs */}
+              <circle cx="20%" cy="30%" r="30%" fill="url(#grad1)" filter="url(#blur)">
+                <animate attributeName="cx" values="20%;80%;20%" dur="20s" repeatCount="indefinite" />
+                <animate attributeName="cy" values="30%;70%;30%" dur="25s" repeatCount="indefinite" />
+              </circle>
+              
+              <circle cx="80%" cy="70%" r="30%" fill="url(#grad2)" filter="url(#blur)">
+                <animate attributeName="cx" values="80%;20%;80%" dur="25s" repeatCount="indefinite" />
+                <animate attributeName="cy" values="70%;30%;70%" dur="20s" repeatCount="indefinite" />
+              </circle>
+              
+              {/* Abstract Data Grid / Network Lines */}
+              <g stroke="rgba(255, 255, 255, 0.05)" strokeWidth="1">
+                {/* Horizontal lines */}
+                {Array.from({ length: 15 }).map((_, i) => (
+                  <line key={`h-${i}`} x1="0" y1={`${(i + 1) * 7}%`} x2="100%" y2={`${(i + 1) * 7}%`} />
+                ))}
+                {/* Vertical lines */}
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <line key={`v-${i}`} x1={`${(i + 1) * 10}%`} y1="0" x2={`${(i + 1) * 10}%`} y2="100%" />
+                ))}
+              </g>
 
-        {/* Brand Header */}
-        <div className="relative z-10">
-          <BrandLogo size="lg" />
-        </div>
-
-        {/* Feature Highlights */}
-        <div className="relative z-10 space-y-6 max-w-lg">
-          <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-300">
-            <ShieldCheck className="h-3.5 w-3.5" /> HIPAA-Compliant RBAC Architecture
+              {/* Data Nodes */}
+              <g fill="rgba(6, 182, 212, 0.5)">
+                <circle cx="30%" cy="42%" r="2" />
+                <circle cx="70%" cy="28%" r="3" />
+                <circle cx="50%" cy="70%" r="2" />
+                <circle cx="80%" cy="84%" r="4" />
+                <circle cx="20%" cy="77%" r="2" />
+                <circle cx="40%" cy="21%" r="3" />
+              </g>
+            </svg>
           </div>
-          <h2 className="text-3xl font-extrabold text-white leading-tight">
-            Unified Clinical Data Ingestion, Profiling & AI Intelligence
-          </h2>
-          <p className="text-sm text-slate-300 leading-relaxed">
-            Automate healthcare data quality monitoring, demographic deduplication, ML clinical risk scoring, and natural-language intelligence.
-          </p>
 
-          <div className="grid grid-cols-2 gap-4 pt-4">
-            <div className="p-4 rounded-xl glass-panel">
-              <Database className="h-5 w-5 text-cyan-400 mb-2" />
-              <h3 className="font-semibold text-sm text-white">Polars & DuckDB Lake</h3>
-              <p className="text-xs text-slate-400 mt-1">High-speed columnar analytics & clinical validation</p>
+          <div className="relative z-10 flex items-center gap-2">
+            <BrandLogo collapsed={false} theme="dark" />
+          </div>
+          
+          <div className="relative z-10 mt-auto">
+            <div className="border-l-2 border-cyan-500 pl-6 py-1 mb-4">
+              <h1 className="text-4xl md:text-5xl font-light tracking-tight text-white leading-tight">
+                Intelligence <br />
+                <span className="font-bold text-cyan-400">Decoded.</span>
+              </h1>
             </div>
-            <div className="p-4 rounded-xl glass-panel">
-              <BrainCircuit className="h-5 w-5 text-teal-400 mb-2" />
-              <h3 className="font-semibold text-sm text-white">Local Ollama AI</h3>
-              <p className="text-xs text-slate-400 mt-1">Natural-language to SQL with privacy-preserving LLMs</p>
+            <p className="max-w-sm text-sm text-slate-400 font-light tracking-wide leading-relaxed pl-6">
+              The definitive source of truth for your clinical data landscape.
+            </p>
+          </div>
+        </section>
+        
+        {/* Right Side: Form Panel */}
+        <section className="flex w-1/2 items-center justify-center p-6 sm:p-12 lg:p-24 bg-white">
+          <div className="w-full max-w-md flex flex-col justify-center">
+            <div className="mb-10 lg:hidden self-start">
+              <BrandLogo collapsed={false} theme="light" />
             </div>
+            
+            <Outlet />
+            
           </div>
-        </div>
-
-        {/* Footer */}
-        <div className="relative z-10 text-xs text-slate-500 font-mono">
-          © 2026 CareData Intelligence • Powered by React, Go & Python
-        </div>
+        </section>
+        
       </div>
-
-      {/* Right Form Panel */}
-      <div className="flex w-full lg:w-1/2 flex-col justify-between p-6 sm:p-12">
-        <div className="flex justify-between items-center w-full max-w-md mx-auto mb-4">
-          <a
-            href="/"
-            className="text-xs text-slate-400 hover:text-cyan-400 flex items-center gap-1.5 transition"
-          >
-            <span>← Back to Platform Overview</span>
-          </a>
-          <div className="lg:hidden">
-            <BrandLogo size="sm" showText={false} />
-          </div>
-        </div>
-
-        <div className="w-full max-w-md mx-auto my-auto">
-          <Outlet />
-        </div>
-
-        <div className="w-full max-w-md mx-auto pt-6 text-center text-[11px] text-slate-500 lg:hidden">
-          © {new Date().getFullYear()} CareData Intelligence
-        </div>
-      </div>
-    </div>
+    </main>
   );
 };

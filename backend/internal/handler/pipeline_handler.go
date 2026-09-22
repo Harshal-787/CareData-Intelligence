@@ -200,3 +200,43 @@ func (h *PipelineHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 		"count":      len(logs),
 	})
 }
+
+// UpdateProgressInternal handles POST /api/internal/pipeline/progress from Python workers
+func (h *PipelineHandler) UpdateProgressInternal(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		JobID            string                      `json:"job_id"`
+		Stage            domain.PipelineStageKey     `json:"stage"`
+		Progress         int                         `json:"progress"`
+		Status           domain.PipelineStageStatus  `json:"status"`
+		Summary          string                      `json:"summary"`
+		RecordsProcessed int64                       `json:"records_processed"`
+		RecordsFlagged   int64                       `json:"records_flagged"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	if payload.JobID == "" || payload.Stage == "" {
+		respondError(w, http.StatusBadRequest, "job_id and stage are required")
+		return
+	}
+
+	err := h.pipelineService.UpdateProgress(
+		payload.JobID,
+		payload.Stage,
+		payload.Progress,
+		payload.Status,
+		payload.Summary,
+		payload.RecordsProcessed,
+		payload.RecordsFlagged,
+	)
+
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}

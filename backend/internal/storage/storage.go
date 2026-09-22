@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -14,7 +15,9 @@ import (
 
 type Storage interface {
 	Save(bucket, key string, data []byte, contentType string) (string, error)
+	SaveStream(bucket, key string, reader io.Reader, contentType string) (string, error)
 	Get(bucket, key string) ([]byte, error)
+	GetStream(bucket, key string) (io.ReadCloser, error)
 	Delete(bucket, key string) error
 	Exists(bucket, key string) (bool, error)
 	GetStoragePath(bucket, key string) string
@@ -69,6 +72,28 @@ func (s *LocalStorage) Save(bucket, key string, data []byte, contentType string)
 	return fullPath, nil
 }
 
+func (s *LocalStorage) SaveStream(bucket, key string, reader io.Reader, contentType string) (string, error) {
+	cleanKey := strings.TrimPrefix(filepath.Clean(key), "/")
+	fullPath := filepath.Join(s.baseDir, bucket, cleanKey)
+
+	dir := filepath.Dir(fullPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create directory for storage: %w", err)
+	}
+
+	file, err := os.OpenFile(fullPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file for stream writing: %w", err)
+	}
+	defer file.Close()
+
+	if _, err := io.Copy(file, reader); err != nil {
+		return "", fmt.Errorf("failed to copy stream to storage: %w", err)
+	}
+
+	return fullPath, nil
+}
+
 func (s *LocalStorage) Get(bucket, key string) ([]byte, error) {
 	cleanKey := strings.TrimPrefix(filepath.Clean(key), "/")
 	fullPath := filepath.Join(s.baseDir, bucket, cleanKey)
@@ -92,6 +117,31 @@ func (s *LocalStorage) Get(bucket, key string) ([]byte, error) {
 	}
 
 	return nil, fmt.Errorf("failed to read object %s from storage (bucket: %s): %w", key, bucket, err)
+}
+
+func (s *LocalStorage) GetStream(bucket, key string) (io.ReadCloser, error) {
+	cleanKey := strings.TrimPrefix(filepath.Clean(key), "/")
+	fullPath := filepath.Join(s.baseDir, bucket, cleanKey)
+
+	file, err := os.Open(fullPath)
+	if err == nil {
+		return file, nil
+	}
+
+	// Direct path fallback
+	if directFile, directErr := os.Open(key); directErr == nil {
+		return directFile, nil
+	}
+
+	// Base directory direct join fallback
+	if bucket != "" {
+		baseJoinPath := filepath.Join(s.baseDir, cleanKey)
+		if directFile, directErr := os.Open(baseJoinPath); directErr == nil {
+			return directFile, nil
+		}
+	}
+
+	return nil, fmt.Errorf("failed to open object stream %s from storage (bucket: %s): %w", key, bucket, err)
 }
 
 func (s *LocalStorage) Delete(bucket, key string) error {

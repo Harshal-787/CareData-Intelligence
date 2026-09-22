@@ -39,17 +39,24 @@ func (s *QualityService) RunQualityAudit(datasetID, orgID string) (*domain.Quali
 		return nil, fmt.Errorf("dataset not found")
 	}
 
-	// 1. Fetch raw data
-	data, err := s.storage.Get("raw-data", dataset.StoragePath)
+	// 2. Open stream for validation
+	stream1, err := s.storage.GetStream("raw-data", dataset.StoragePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read dataset from storage: %w", err)
+		return nil, fmt.Errorf("failed to open dataset stream for validation: %w", err)
 	}
+	defer stream1.Close()
 
-	// 2. Parse data rows & schema
-	parseRes, err := ingest.ParseDatasetContent(dataset.FileType, data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse dataset content: %w", err)
+	var iter1 ingest.RecordIterator
+	if dataset.FileType == "parquet" {
+		fullPath := s.storage.GetStoragePath("raw-data", dataset.StoragePath)
+		iter1, err = ingest.NewRecordIterator(dataset.FileType, stream1, fullPath)
+	} else {
+		iter1, err = ingest.NewRecordIterator(dataset.FileType, stream1, "")
 	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to create record iterator: %w", err)
+	}
+	defer iter1.Close()
 
 	// 3. Load or initialize validation rules
 	rules, err := s.repo.ListValidationRules(orgID, datasetID)
@@ -61,12 +68,37 @@ func (s *QualityService) RunQualityAudit(datasetID, orgID string) (*domain.Quali
 		rules, _ = s.repo.ListValidationRules(orgID, datasetID)
 	}
 
-	// 4. Generate Column Statistical Profiles
-	columnProfiles := quality.ProfileDataset(parseRes.Schema, parseRes.Preview)
-	profilingJSON, _ := json.Marshal(columnProfiles)
+	// 4. Parse Schema
+	var schema []domain.DatasetColumn
+	if dataset.SchemaJSON != "" {
+		_ = json.Unmarshal([]byte(dataset.SchemaJSON), &schema)
+	}
 
 	// 5. Evaluate Clinical Validation Rules & Scores
-	valResult := quality.EvaluateQualityAndRules(datasetID, orgID, parseRes.Schema, parseRes.Preview, rules)
+	valResult := quality.EvaluateQualityAndRules(datasetID, orgID, schema, iter1, rules)
+
+	// 6. Open stream for profiling
+	stream2, err := s.storage.GetStream("raw-data", dataset.StoragePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open dataset stream for profiling: %w", err)
+	}
+	defer stream2.Close()
+	
+	var iter2 ingest.RecordIterator
+	if dataset.FileType == "parquet" {
+		fullPath := s.storage.GetStoragePath("raw-data", dataset.StoragePath)
+		iter2, err = ingest.NewRecordIterator(dataset.FileType, stream2, fullPath)
+	} else {
+		iter2, err = ingest.NewRecordIterator(dataset.FileType, stream2, "")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to create profiling iterator: %w", err)
+	}
+	defer iter2.Close()
+
+	// 7. Generate Column Statistical Profiles
+	columnProfiles := quality.ProfileDataset(schema, iter2)
+	profilingJSON, _ := json.Marshal(columnProfiles)
 
 	now := time.Now()
 	reportID := fmt.Sprintf("qr-%s", uuid.New().String()[:12])

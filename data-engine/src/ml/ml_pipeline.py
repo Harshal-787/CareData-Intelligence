@@ -30,6 +30,17 @@ except ImportError:
     StandardScaler = None
     LogisticRegression = None
 
+try:
+    from src.ml.risk_scorer import ReadmissionRiskScorer
+    from src.ml.model_registry import ModelRegistry
+except ImportError:
+    try:
+        from risk_scorer import ReadmissionRiskScorer
+        from model_registry import ModelRegistry
+    except ImportError:
+        ReadmissionRiskScorer = None
+        ModelRegistry = None
+
 
 def extract_numeric(val: Any, default: float = 0.0) -> float:
     """Extracts a numeric float safely from strings or mixed formats."""
@@ -288,6 +299,43 @@ def run_ml_pipeline(
             sys.stderr.write(f"Scikit-learn IsolationForest fallback: {e}\n")
             iso_forest_scores = None
 
+    # XGBoost Risk Stratification
+    xgb_risk_df = None
+    xgb_run_id = None
+    if ReadmissionRiskScorer is not None and pd is not None and total_records >= 2:
+        try:
+            X_df = pd.DataFrame(parsed_features)
+            scorer = ReadmissionRiskScorer()
+            
+            # Use LACE index to generate synthetic labels if 'readmitted' is missing
+            if 'readmitted' in X_df.columns:
+                y_train = X_df['readmitted'].astype(int)
+            else:
+                lace_scores = scorer.compute_lace_index(X_df)
+                y_train = (lace_scores > 10).astype(int)
+                
+                # Ensure at least one of each class for XGBoost to run
+                if y_train.nunique() < 2:
+                    y_train.iloc[0] = 0
+                    y_train.iloc[-1] = 1
+
+            scorer.fit(X_df, y_train)
+            xgb_risk_df = scorer.predict_risk(X_df)
+            
+            # Log to MLflow
+            if ModelRegistry is not None:
+                registry = ModelRegistry()
+                xgb_run_id = registry.log_run(
+                    experiment_name="CareData_Enterprise_Readmission",
+                    model_name="Readmission_XGBoost",
+                    model=scorer.model,
+                    params={"n_estimators": 300, "learning_rate": 0.05, "max_depth": 5},
+                    metrics={"training_records": total_records}
+                )
+        except Exception as e:
+            sys.stderr.write(f"XGBoost RiskScorer fallback: {e}\n")
+            xgb_risk_df = None
+
     anomalies = []
     risk_scores = []
     
@@ -352,7 +400,33 @@ def run_ml_pipeline(
             })
 
         # 2. Compute Patient Risk
-        risk_score, tier, prob, drivers, recs = compute_patient_risk_score(feats)
+        # Get heuristic drivers and recommendations
+        heuristic_score, heuristic_tier, prob, drivers, recs = compute_patient_risk_score(feats)
+        
+        # Override with actual XGBoost prediction if available
+        if xgb_risk_df is not None and idx < len(xgb_risk_df):
+            row = xgb_risk_df.iloc[idx]
+            prob = float(row['readmission_probability'])
+            tier = str(row['risk_tier']).upper()
+            risk_score = round(prob * 100, 1)
+            
+            if tier == "HIGH":
+                recs = [
+                    "Schedule 48-hour post-discharge telemedicine or home health check",
+                    "Enroll in Chronic Care Management (CCM) transition protocol",
+                    "Perform urgent pharmacy medication reconciliation"
+                ]
+            elif tier == "MODERATE":
+                recs = [
+                    "Schedule primary care physician follow-up within 7-10 days",
+                    "Provide patient education kit on warning symptoms and medication adherence"
+                ]
+            else:
+                recs = ["Standard discharge instructions and routine 30-day wellness check"]
+        else:
+            risk_score = heuristic_score
+            tier = heuristic_tier
+
         sum_risk += risk_score
         
         if tier == "HIGH":
@@ -397,7 +471,7 @@ def run_ml_pipeline(
     model_run = {
         "id": "run-latest-001",
         "modelName": "CareData Multi-Model Intelligence Suite v2.4",
-        "modelType": "Isolation Forest (Ensemble) + Calibrated Risk Classifier",
+        "modelType": "Isolation Forest (Ensemble) + XGBoost Readmission Classifier",
         "status": "COMPLETED",
         "accuracy": 0.942,
         "f1Score": 0.915,
@@ -411,7 +485,8 @@ def run_ml_pipeline(
             "contamination": contamination,
             "max_samples": "auto",
             "bootstrap": False,
-            "algorithm": "IsolationForest+LogisticRisk"
+            "algorithm": "IsolationForest+XGBoost",
+            "mlflow_run_id": xgb_run_id
         },
         "featureImportances": global_feature_importance
     }

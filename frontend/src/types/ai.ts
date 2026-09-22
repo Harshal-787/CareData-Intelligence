@@ -77,7 +77,7 @@ export interface AIReportRequest {
   sections?: string[];
 }
 
-export interface OllamaStatusResponse {
+export interface GeminiStatusResponse {
   connected: boolean;
   url: string;
   activeModel: string;

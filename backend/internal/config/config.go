@@ -20,6 +20,7 @@ type Config struct {
 	MinIOSecretKey string
 	MinIOUseSSL   bool
 	OllamaURL     string
+	GeminiAPIKey  string
 }
 
 func LoadConfig() *Config {
@@ -59,7 +60,7 @@ func LoadConfig() *Config {
 		MinIOAccessKey: getEnv("MINIO_ACCESS_KEY", "caredata_minio"),
 		MinIOSecretKey: getEnv("MINIO_SECRET_KEY", "caredata_minio_secret123"),
 		MinIOUseSSL:    getEnv("MINIO_USE_SSL", "false") == "true",
-		OllamaURL:      getEnv("OLLAMA_URL", "http://localhost:11434"),
+		GeminiAPIKey:   getEnv("GEMINI_API_KEY", ""),
 	}
 }
 

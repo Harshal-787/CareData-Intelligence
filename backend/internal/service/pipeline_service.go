@@ -3,12 +3,12 @@ package service
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"sync"
 	"time"
 
 	"caredata/backend/internal/config"
 	"caredata/backend/internal/domain"
+	"caredata/backend/internal/queue"
 	"caredata/backend/internal/repository"
 	"caredata/backend/internal/storage"
 	"github.com/google/uuid"
@@ -19,16 +19,18 @@ type PipelineService struct {
 	pipelineRepo *repository.PipelineRepository
 	store        storage.Storage
 	cfg          *config.Config
+	redisQueue   *queue.RedisQueue
 	cancels      map[string]context.CancelFunc
 	mu           sync.Mutex
 }
 
-func NewPipelineService(repo *repository.Repository, pipelineRepo *repository.PipelineRepository, store storage.Storage, cfg *config.Config) *PipelineService {
+func NewPipelineService(repo *repository.Repository, pipelineRepo *repository.PipelineRepository, store storage.Storage, cfg *config.Config, redisQueue *queue.RedisQueue) *PipelineService {
 	return &PipelineService{
 		repo:         repo,
 		pipelineRepo: pipelineRepo,
 		store:        store,
 		cfg:          cfg,
+		redisQueue:   redisQueue,
 		cancels:      make(map[string]context.CancelFunc),
 	}
 }
@@ -112,7 +114,7 @@ func (s *PipelineService) TriggerPipeline(ctx context.Context, user *domain.User
 		},
 		{
 			Key:              domain.StageAISynthesis,
-			Name:             "Ollama AI Clinical Insights",
+			Name:             "Google Gemini AI Clinical Insights",
 			Description:      "Synthesize narrative executive summary and automated clinical reports",
 			Status:           domain.StageStatusPending,
 			Progress:         0,
@@ -251,7 +253,7 @@ func (s *PipelineService) RetryPipeline(ctx context.Context, id string, user *do
 	return s.TriggerPipeline(ctx, user, req)
 }
 
-// Background Orchestrator Worker Simulation
+// Enqueue job to Redis for Python data engine
 func (s *PipelineService) executePipelineRun(ctx context.Context, job *domain.PipelineJob) {
 	defer func() {
 		s.mu.Lock()
@@ -259,168 +261,114 @@ func (s *PipelineService) executePipelineRun(ctx context.Context, job *domain.Pi
 		s.mu.Unlock()
 	}()
 
-	stageDurations := []time.Duration{
-		1200 * time.Millisecond, // Ingestion
-		1500 * time.Millisecond, // Profiling
-		1600 * time.Millisecond, // Validation
-		1800 * time.Millisecond, // Deduplication
-		2000 * time.Millisecond, // ML
-		1900 * time.Millisecond, // AI
+	payload := map[string]interface{}{
+		"job_id":     job.ID,
+		"dataset_id": job.DatasetID,
 	}
 
-	for i := range job.Stages {
-		stage := &job.Stages[i]
-
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		stageStart := time.Now()
-		stage.StartedAt = &stageStart
-		stage.Status = domain.StageStatusRunning
-		stage.Progress = 10
-		job.CurrentStage = stage.Key
-		job.OverallProgress = int(float64(i) / float64(len(job.Stages)) * 100)
-		_ = s.pipelineRepo.UpdateJob(job)
-
+	err := s.redisQueue.Enqueue("pipeline_jobs", payload)
+	if err != nil {
 		s.pipelineRepo.AddLog(domain.PipelineExecutionLog{
 			PipelineID: job.ID,
-			StageKey:   stage.Key,
-			Level:      "INFO",
-			Message:    fmt.Sprintf("Stage %d/6 [%s] started: %s", i+1, stage.Name, stage.Description),
+			StageKey:   domain.StageIngestion,
+			Level:      "ERROR",
+			Message:    fmt.Sprintf("Failed to enqueue pipeline job to Redis: %v", err),
 			Timestamp:  time.Now(),
 		})
-
-		// Simulate progressive stage steps
-		for step := 1; step <= 4; step++ {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(stageDurations[i] / 4):
-				stage.Progress = step * 25
-				job.OverallProgress = int((float64(i)+float64(step)/4.0)/float64(len(job.Stages))*100)
-				_ = s.pipelineRepo.UpdateJob(job)
-			}
-		}
-
-		stageEnd := time.Now()
-		stage.CompletedAt = &stageEnd
-		stage.DurationMs = stageEnd.Sub(stageStart).Milliseconds()
-		stage.Status = domain.StageStatusCompleted
-		stage.Progress = 100
-
-		// Populate simulated stage results
-		switch stage.Key {
-		case domain.StageIngestion:
-			stage.RecordsPassed = stage.RecordsProcessed
-			stage.Summary = fmt.Sprintf("Partitioned %d rows into compressed Apache Parquet lakehouse storage", stage.RecordsProcessed)
-			s.pipelineRepo.AddLog(domain.PipelineExecutionLog{
-				PipelineID: job.ID,
-				StageKey:   stage.Key,
-				Level:      "SUCCESS",
-				Message:    fmt.Sprintf("Ingestion completed: %d rows written with snappy compression in %dms", stage.RecordsProcessed, stage.DurationMs),
-				Timestamp:  time.Now(),
-			})
-
-		case domain.StageProfiling:
-			stage.RecordsPassed = stage.RecordsProcessed
-			job.QualityScore = 93.5 + rand.Float64()*5.5
-			stage.Summary = fmt.Sprintf("DuckDB completed full columnar profiling across all clinical metrics (Quality: %.1f%%)", job.QualityScore)
-			s.pipelineRepo.AddLog(domain.PipelineExecutionLog{
-				PipelineID: job.ID,
-				StageKey:   stage.Key,
-				Level:      "SUCCESS",
-				Message:    fmt.Sprintf("DuckDB profiling finished. Data Quality Score: %.1f%%", job.QualityScore),
-				Timestamp:  time.Now(),
-			})
-
-		case domain.StageValidation:
-			flagged := int64(15 + rand.Intn(40))
-			stage.RecordsFlagged = flagged
-			stage.RecordsPassed = stage.RecordsProcessed - flagged
-			stage.Summary = fmt.Sprintf("Enforced 14 clinical boundary rules. Flagged %d non-blocking violations", flagged)
-			s.pipelineRepo.AddLog(domain.PipelineExecutionLog{
-				PipelineID: job.ID,
-				StageKey:   stage.Key,
-				Level:      "WARN",
-				Message:    fmt.Sprintf("%d non-blocking clinical rule violations recorded (e.g. vital signs out of normal range)", flagged),
-				Timestamp:  time.Now(),
-			})
-
-		case domain.StageDeduplication:
-			dupes := 8 + rand.Intn(15)
-			job.DuplicatesFound = dupes
-			stage.RecordsFlagged = int64(dupes)
-			stage.RecordsPassed = stage.RecordsProcessed - int64(dupes)
-			stage.Summary = fmt.Sprintf("RapidFuzz demographic matching flagged %d duplicate candidate clusters", dupes)
-			s.pipelineRepo.AddLog(domain.PipelineExecutionLog{
-				PipelineID: job.ID,
-				StageKey:   stage.Key,
-				Level:      "SUCCESS",
-				Message:    fmt.Sprintf("Patient deduplication completed. %d candidate duplicate pairs queued for review", dupes),
-				Timestamp:  time.Now(),
-			})
-
-		case domain.StageMLInference:
-			anomalies := 18 + rand.Intn(30)
-			highRisk := 45 + rand.Intn(60)
-			job.AnomaliesDetected = anomalies
-			job.HighRiskPatients = highRisk
-			stage.RecordsFlagged = int64(anomalies + highRisk)
-			stage.RecordsPassed = stage.RecordsProcessed - stage.RecordsFlagged
-			stage.Summary = fmt.Sprintf("Isolation Forest identified %d billing/vitals outliers; scored %d high-risk readmissions", anomalies, highRisk)
-			s.pipelineRepo.AddLog(domain.PipelineExecutionLog{
-				PipelineID: job.ID,
-				StageKey:   stage.Key,
-				Level:      "SUCCESS",
-				Message:    fmt.Sprintf("ML inference: %d anomalies detected, %d patients stratified in High Risk tier", anomalies, highRisk),
-				Timestamp:  time.Now(),
-			})
-
-		case domain.StageAISynthesis:
-			stage.RecordsPassed = stage.RecordsProcessed
-			stage.Summary = "Ollama synthesized executive summary, risk analysis, and automated clinical brief"
-			s.pipelineRepo.AddLog(domain.PipelineExecutionLog{
-				PipelineID: job.ID,
-				StageKey:   stage.Key,
-				Level:      "SUCCESS",
-				Message:    "Ollama AI clinical synthesis compiled successfully. Intelligence report ready.",
-				Timestamp:  time.Now(),
-			})
-		}
-
+		
+		now := time.Now()
+		job.Status = domain.PipelineStatusFailed
+		job.ErrorMessage = "Failed to dispatch job to worker queue"
+		job.CompletedAt = &now
 		_ = s.pipelineRepo.UpdateJob(job)
+		return
 	}
-
-	// Finalize overall job
-	totalEnd := time.Now()
-	job.CompletedAt = &totalEnd
-	job.Status = domain.PipelineStatusCompleted
-	job.OverallProgress = 100
-	if job.StartedAt != nil {
-		job.DurationMs = totalEnd.Sub(*job.StartedAt).Milliseconds()
-	}
-	_ = s.pipelineRepo.UpdateJob(job)
 
 	s.pipelineRepo.AddLog(domain.PipelineExecutionLog{
 		PipelineID: job.ID,
-		StageKey:   domain.StageAISynthesis,
-		Level:      "SUCCESS",
-		Message:    fmt.Sprintf("✓ Full Pipeline %s completed successfully in %.1fs across all 6 stages.", job.ID, float64(job.DurationMs)/1000.0),
+		StageKey:   domain.StageIngestion,
+		Level:      "INFO",
+		Message:    fmt.Sprintf("Pipeline %s successfully queued for worker processing", job.ID),
 		Timestamp:  time.Now(),
 	})
+}
 
-	s.pipelineRepo.AppendAuditLog(domain.AuditLog{
-		OrganizationID: job.OrganizationID,
-		UserID:         job.InitiatedBy,
-		UserEmail:      "system@caredata.ai",
-		Action:         "PIPELINE_COMPLETE",
-		Resource:       "pipeline:" + job.ID,
-		Severity:       "INFO",
-		Module:         "PIPELINE",
-		Status:         "SUCCESS",
-		Details:        fmt.Sprintf("Pipeline %s finished in %.1fs with Quality Score %.1f%% (%d records)", job.ID, float64(job.DurationMs)/1000.0, job.QualityScore, job.TotalRecords),
-	})
+// UpdateProgress handles the webhook payload from Python workers
+func (s *PipelineService) UpdateProgress(jobID string, stageKey domain.PipelineStageKey, progress int, status domain.PipelineStageStatus, summary string, recordsProcessed, recordsFlagged int64) error {
+	job, err := s.pipelineRepo.GetJobByID(jobID)
+	if err != nil || job == nil {
+		return fmt.Errorf("job not found")
+	}
+
+	job.CurrentStage = stageKey
+	
+	// Find and update stage
+	stageIdx := -1
+	for i, st := range job.Stages {
+		if st.Key == stageKey {
+			stageIdx = i
+			break
+		}
+	}
+	
+	if stageIdx >= 0 {
+		stage := &job.Stages[stageIdx]
+		if stage.StartedAt == nil {
+			now := time.Now()
+			stage.StartedAt = &now
+		}
+		
+		stage.Progress = progress
+		stage.Status = status
+		stage.Summary = summary
+		stage.RecordsProcessed = recordsProcessed
+		stage.RecordsFlagged = recordsFlagged
+		stage.RecordsPassed = recordsProcessed - recordsFlagged
+		
+		if status == domain.StageStatusCompleted || status == domain.StageStatusFailed {
+			now := time.Now()
+			stage.CompletedAt = &now
+			stage.DurationMs = now.Sub(*stage.StartedAt).Milliseconds()
+			
+			// Calculate overall progress based on completed stages
+			job.OverallProgress = int(float64(stageIdx+1) / float64(len(job.Stages)) * 100)
+			
+			logLevel := "SUCCESS"
+			if status == domain.StageStatusFailed {
+				logLevel = "ERROR"
+			}
+			s.pipelineRepo.AddLog(domain.PipelineExecutionLog{
+				PipelineID: job.ID,
+				StageKey:   stage.Key,
+				Level:      logLevel,
+				Message:    fmt.Sprintf("Stage %s %s: %s", stage.Name, status, summary),
+				Timestamp:  time.Now(),
+			})
+		}
+	}
+	
+	// If last stage is completed, mark job as completed
+	if stageKey == domain.StageAISynthesis && status == domain.StageStatusCompleted {
+		job.Status = domain.PipelineStatusCompleted
+		now := time.Now()
+		job.CompletedAt = &now
+		if job.StartedAt != nil {
+			job.DurationMs = now.Sub(*job.StartedAt).Milliseconds()
+		}
+		job.OverallProgress = 100
+		
+		s.pipelineRepo.AppendAuditLog(domain.AuditLog{
+			OrganizationID: job.OrganizationID,
+			UserID:         job.InitiatedBy,
+			UserEmail:      "system@caredata.ai",
+			Action:         "PIPELINE_COMPLETE",
+			Resource:       "pipeline:" + job.ID,
+			Severity:       "INFO",
+			Module:         "PIPELINE",
+			Status:         "SUCCESS",
+			Details:        fmt.Sprintf("Pipeline %s finished successfully", job.ID),
+		})
+	}
+
+	return s.pipelineRepo.UpdateJob(job)
 }
