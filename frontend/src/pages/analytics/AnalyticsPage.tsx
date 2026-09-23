@@ -31,6 +31,7 @@ import {
   executeOlapQuery,
   fetchSnowflakeStatus,
   triggerSnowflakeSync,
+  updateSnowflakeConfig,
 } from '../../api/analyticsApi';
 import {
   AnalyticsOverviewResponse,
@@ -63,6 +64,7 @@ export const AnalyticsPage: React.FC = () => {
   const [snowflakeData, setSnowflakeData] = useState<SnowflakeStatusResponse | null>(null);
   const [syncingSnowflake, setSyncingSnowflake] = useState<boolean>(false);
   const [syncSuccessMessage, setSyncSuccessMessage] = useState<string | null>(null);
+  const [provisioning, setProvisioning] = useState<boolean>(false);
 
   // Load Overview Data
   const loadAnalytics = async () => {
@@ -141,6 +143,33 @@ export const AnalyticsPage: React.FC = () => {
       alert(err.response?.data?.error || 'Failed to trigger Snowflake sync');
     } finally {
       setSyncingSnowflake(false);
+    }
+  };
+
+  // Provision Tenant Warehouse
+  const handleProvisionWarehouse = async () => {
+    try {
+      setProvisioning(true);
+      await updateSnowflakeConfig({
+        id: '',
+        organizationId: '',
+        account: '',
+        warehouse: '',
+        database: '',
+        schema: '',
+        role: '',
+        username: '',
+        isConnected: false,
+        autoSync: true,
+        syncInterval: 'DAILY (Midnight UTC)',
+        updatedAt: new Date().toISOString(),
+      });
+      alert('Provisioning initiated successfully! Refreshing status...');
+      await loadSnowflake();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to provision warehouse');
+    } finally {
+      setProvisioning(false);
     }
   };
 
@@ -872,10 +901,21 @@ export const AnalyticsPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-2 flex flex-col gap-3">
+                {!snowflakeData?.config?.isConnected && (
+                  <button
+                    onClick={handleProvisionWarehouse}
+                    disabled={provisioning}
+                    className="w-full py-2.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  >
+                    <Server className={`w-4 h-4 ${provisioning ? 'animate-pulse' : ''}`} />
+                    {provisioning ? 'Provisioning...' : 'Provision Dedicated Warehouse'}
+                  </button>
+                )}
+                
                 <button
                   onClick={handleTriggerSync}
-                  disabled={syncingSnowflake}
+                  disabled={syncingSnowflake || !snowflakeData?.config?.isConnected}
                   className="w-full py-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs font-bold shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
                 >
                   <CloudLightning className={`w-4 h-4 ${syncingSnowflake ? 'animate-spin' : ''}`} />

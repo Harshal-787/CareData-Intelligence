@@ -400,6 +400,10 @@ func (d *DB) seedDemoData() error {
 	orgID := "org-default-001"
 	now := time.Now()
 
+	// Wipe any lingering mock data from snowflake configs
+	d.Exec("DELETE FROM snowflake_configs")
+
+
 	// 1. Seed Main Demo Organization
 	if d.Driver == "postgres" {
 		_, _ = d.Exec(`
