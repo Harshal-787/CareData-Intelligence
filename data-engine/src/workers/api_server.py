@@ -78,53 +78,13 @@ def execute_ml_pipeline(req: MLRunRequest):
         if df.empty:
             raise HTTPException(status_code=400, detail="Dataset is empty")
             
-        # Define basic numeric features based on what we expect in clinical data
-        # In a real system, these are dynamically mapped from the schema
-        possible_numeric = ["age", "heart_rate", "systolic_bp", "diastolic_bp", "temperature", "respiration_rate", "length_of_stay", "total_charges", "prior_admissions", "comorbidity_count"]
-        numeric_features = [c for c in possible_numeric if c in df.columns]
-        categorical_features = [c for c in ["gender", "diagnosis_code"] if c in df.columns]
-        
-        # 1. Feature Engineering
-        engineer = ClinicalFeatureEngineer(numeric_features=numeric_features, categorical_features=categorical_features)
-        df_scaled = engineer.fit_transform(df)
-        
-        # 2. Anomaly Detection (Isolation Forest)
-        anomaly_detector = ClinicalAnomalyDetector(contamination=req.contamination)
-        anomaly_detector.fit(df_scaled)
-        anomalies = anomaly_detector.predict(df_scaled)
-        anomaly_scores = anomaly_detector.score_samples(df_scaled)
-        
-        # 3. Risk Stratification (XGBoost)
-        # Note: In a real system, XGBoost needs a target variable to train on. 
-        # For this endpoint, we'd normally load a pre-trained MLflow model. 
-        # We will use the LACE index heuristic as a placeholder since training needs historical labels.
-        risk_scorer = ReadmissionRiskScorer()
-        lace_scores = risk_scorer.compute_lace_index(df)
-        
-        # Prepare response
         df_clean = df.astype(object).where(pd.notnull(df), None)
-        results = []
-        for idx in range(len(df_clean)):
-            row = df_clean.iloc[idx].to_dict()
-            results.append({
-                "record_id": str(idx),
-                "is_anomaly": bool(anomalies.iloc[idx]),
-                "anomaly_score": float(anomaly_scores.iloc[idx]),
-                "lace_score": int(lace_scores.iloc[idx]),
-                "raw_data": row
-            })
-            
-        return {
-            "modelRun": {
-                "Algorithm": "IsolationForest + XGBoost",
-                "Accuracy": 0.0, # Real metrics come from MLflow tracking
-                "Contamination": req.contamination,
-                "NEstimators": req.n_estimators,
-                "AnomalyCount": int(anomalies.sum()),
-                "TotalRecords": len(df)
-            },
-            "results": results
-        }
+        records = df_clean.to_dict(orient="records")
+        
+        from src.ml.ml_pipeline import run_ml_pipeline
+        result = run_ml_pipeline(records, contamination=req.contamination, n_estimators=req.n_estimators)
+        
+        return result
         
     except Exception as e:
         logger.error(f"ML execution failed: {e}")

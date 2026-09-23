@@ -65,11 +65,6 @@ func (s *MLService) GetOverview(orgID, datasetID string) (*domain.MLOverviewResp
 		return nil, err
 	}
 
-	if overview.TotalInferences == 0 {
-		s.ensureSeedData()
-		return s.repo.GetMLOverviewStats(orgID, datasetID)
-	}
-
 	return overview, nil
 }
 
@@ -77,10 +72,6 @@ func (s *MLService) ListAnomalies(params domain.MLFilterParams) ([]domain.MLAnom
 	anomalies, total, err := s.repo.ListMLAnomalies(params)
 	if err != nil {
 		return nil, 0, err
-	}
-	if total == 0 && params.Severity == "" && params.Category == "" && params.Search == "" {
-		s.ensureSeedData()
-		return s.repo.ListMLAnomalies(params)
 	}
 	return anomalies, total, nil
 }
@@ -102,10 +93,6 @@ func (s *MLService) ListRiskScores(params domain.MLFilterParams) ([]domain.MLRis
 	if err != nil {
 		return nil, 0, err
 	}
-	if total == 0 && params.RiskTier == "" && params.Search == "" {
-		s.ensureSeedData()
-		return s.repo.ListMLRiskScores(params)
-	}
 	return scores, total, nil
 }
 
@@ -113,10 +100,6 @@ func (s *MLService) ListModelRuns(orgID string) ([]domain.MLModelRun, error) {
 	runs, err := s.repo.ListMLModelRuns(orgID)
 	if err != nil {
 		return nil, err
-	}
-	if len(runs) == 0 {
-		s.ensureSeedData()
-		return s.repo.ListMLModelRuns(orgID)
 	}
 	return runs, nil
 }
@@ -148,6 +131,10 @@ func (s *MLService) TriggerMLRun(datasetID, orgID string, req domain.MLTrainRequ
 		return nil, fmt.Errorf("ml inference failed: %w", err)
 	}
 
+	if err := s.repo.ClearMLDataForDataset(datasetID); err != nil {
+		log.Printf("Warning: failed to clear previous ML data for dataset %s: %v", datasetID, err)
+	}
+
 	if err := s.repo.SaveMLModelRun(modelRun); err != nil {
 		return nil, fmt.Errorf("failed saving model run: %w", err)
 	}
@@ -159,4 +146,10 @@ func (s *MLService) TriggerMLRun(datasetID, orgID string, req domain.MLTrainRequ
 	}
 
 	return modelRun, nil
+}
+
+func (s *MLService) ClearMLDataForDataset(datasetID string, orgID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.repo.ClearMLDataForDataset(datasetID)
 }
