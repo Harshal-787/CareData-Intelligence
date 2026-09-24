@@ -33,6 +33,7 @@ import {
   fetchMLModels,
   resolveMLAnomaly,
   triggerMLRun,
+  clearMLData,
 } from '../../api/mlApi';
 import {
   MLOverviewResponse,
@@ -137,7 +138,7 @@ export const MLPredictionsPage: React.FC = () => {
   // Load Models
   const loadModels = async () => {
     try {
-      const data = await fetchMLModels();
+      const data = await fetchMLModels(selectedDataset || undefined);
       setModels(data.models || []);
     } catch (err: any) {
       console.error('Error fetching models:', err);
@@ -146,6 +147,8 @@ export const MLPredictionsPage: React.FC = () => {
 
   useEffect(() => {
     loadOverview();
+    loadRiskScores();
+    loadModels();
   }, [selectedDataset]);
 
   useEffect(() => {
@@ -177,6 +180,31 @@ export const MLPredictionsPage: React.FC = () => {
     }
   };
 
+  const handleClearData = async () => {
+    const datasetToClear = selectedDataset || 'ALL';
+    const msg = selectedDataset 
+      ? 'Are you sure you want to permanently delete all ML predictions and model runs for this dataset?'
+      : 'Are you sure you want to permanently delete ALL ML predictions and model runs for ALL datasets?';
+      
+    if (!confirm(msg)) return;
+    
+    try {
+      await clearMLData(datasetToClear);
+      setOverview(null);
+      setAnomalies([]);
+      setRiskScores([]);
+      setModels([]);
+      setAnomaliesTotal(0);
+      setRiskTotal(0);
+      alert('All old predictions have been successfully deleted.');
+      
+      // Reload overview to reflect fresh zeros
+      loadOverview();
+    } catch (err: any) {
+      alert('Failed to clear data: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
   const handleTriggerTraining = async () => {
     if (!trainDatasetId) {
       alert('Please select a dataset');
@@ -185,6 +213,15 @@ export const MLPredictionsPage: React.FC = () => {
     try {
       setIsTraining(true);
       setTrainSuccessMessage(null);
+      
+      // Instantly wipe the UI to show that a fresh run is happening
+      setOverview(null);
+      setAnomalies([]);
+      setRiskScores([]);
+      setModels([]);
+      setAnomaliesTotal(0);
+      setRiskTotal(0);
+
       const res = await triggerMLRun(trainDatasetId, {
         contamination: trainContamination,
         nEstimators: trainEstimators,
@@ -200,6 +237,10 @@ export const MLPredictionsPage: React.FC = () => {
       }, 1500);
     } catch (err: any) {
       alert('Training failed: ' + (err.response?.data?.message || err.message));
+      // Reload on failure to restore state
+      loadOverview();
+      loadRiskScores();
+      loadModels();
     } finally {
       setIsTraining(false);
     }
@@ -296,13 +337,24 @@ export const MLPredictionsPage: React.FC = () => {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
 
-          <button
-            onClick={() => setIsTrainModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium text-xs rounded-2xl shadow-sm shadow-cyan-600/25 transition transform active:scale-95"
-          >
-            <Sparkles className="w-4 h-4" />
-            Train / Run Pipeline
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleClearData}
+              className="flex items-center gap-2 px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-semibold rounded-2xl transition"
+            >
+              Clear Data
+            </button>
+            <button
+              onClick={() => {
+                setTrainDatasetId(selectedDataset || '');
+                setIsTrainModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-900 shadow-sm shadow-cyan-600/20 text-xs font-semibold rounded-2xl transition"
+            >
+              <Sparkles className="w-4 h-4" />
+              Train / Run Pipeline
+            </button>
+          </div>
         </div>
       </div>
 
@@ -808,7 +860,7 @@ export const MLPredictionsPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-base font-bold text-slate-900">CareData Multi-Model Intelligence Suite v2.4</h3>
+                  <h3 className="text-base font-bold text-slate-900">{models[0]?.modelName || 'CareData Multi-Model Intelligence Suite v2.5'}</h3>
                   <span className="px-2 py-0.5 rounded text-[11px] bg-emerald-500/15 text-emerald-600 border border-emerald-200 font-semibold">
                     Production Active
                   </span>
@@ -828,15 +880,15 @@ export const MLPredictionsPage: React.FC = () => {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2">
               <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
                 <span className="text-[11px] text-slate-400">Algorithm Ensemble</span>
-                <div className="text-sm font-bold text-slate-900 mt-1">Isolation Forest ({overview?.totalInferences ? '100 Trees' : 'N/A'})</div>
+                <div className="text-sm font-bold text-slate-900 mt-1">Isolation Forest ({models[0] ? `${models[0].nEstimators} Trees` : 'N/A'})</div>
               </div>
               <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
                 <span className="text-[11px] text-slate-400">Target Contamination</span>
-                <div className="text-sm font-bold text-cyan-600 mt-1">{overview?.totalInferences ? '8.0% (Adaptive)' : 'N/A'}</div>
+                <div className="text-sm font-bold text-cyan-600 mt-1">{models[0] ? `${(models[0].contamination * 100).toFixed(1)}% (Adaptive)` : 'N/A'}</div>
               </div>
               <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
                 <span className="text-[11px] text-slate-400">Risk Classifier AUC-ROC</span>
-                <div className="text-sm font-bold text-emerald-600 mt-1">{(overview?.modelAucRoc || 0).toFixed(3)}</div>
+                <div className="text-sm font-bold text-emerald-600 mt-1">{(models[0]?.aucRoc || 0).toFixed(3)}</div>
               </div>
               <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
                 <span className="text-[11px] text-slate-400">Inference Latency</span>

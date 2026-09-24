@@ -89,7 +89,7 @@ func main() {
 	redisQueue := queue.NewRedisQueue(redisHost+":6379", "", 0)
 
 	pipelineService := service.NewPipelineService(repo, pipelineRepo, store, cfg, redisQueue)
-	streamSvc = service.NewStreamService(repo, streamHub, mllpServer, cfg)
+	streamSvc = service.NewStreamService(repo, streamHub, mllpServer, dedupeService, cfg)
 
 	h := handler.NewHandler(authService, repo, pipelineRepo)
 	dh := handler.NewDatasetHandler(datasetService)
@@ -175,6 +175,7 @@ func main() {
 			r.Get("/duplicates/mpi", dedupeH.ListMPI)
 			r.Get("/duplicates/{id}", dedupeH.GetByID)
 			r.Post("/datasets/{id}/deduplicate", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(dedupeH.RunDeduplication)).ServeHTTP)
+			r.Delete("/datasets/{id}/deduplicate/data", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(dedupeH.ClearDedupeData)).ServeHTTP)
 			r.Post("/duplicates/{id}/resolve", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(dedupeH.Resolve)).ServeHTTP)
 			r.Post("/duplicates/{id}/unresolve", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(dedupeH.Unresolve)).ServeHTTP)
 			r.Post("/duplicates/bulk-resolve", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin)(http.HandlerFunc(dedupeH.BulkResolve)).ServeHTTP)
@@ -195,6 +196,7 @@ func main() {
 			r.Get("/ml/risk-scores", mlH.ListRiskScores)
 			r.Get("/ml/models", mlH.ListModels)
 			r.Post("/datasets/{id}/ml/run", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(mlH.TriggerMLRun)).ServeHTTP)
+			r.Delete("/datasets/{id}/ml/data", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(mlH.ClearMLData)).ServeHTTP)
 
 			// Phase 7: Local AI, Natural Language Analytics & Smart Reporting (Gemini)
 			r.Get("/ai/status", aiH.GetGeminiStatus)

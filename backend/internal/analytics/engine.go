@@ -66,7 +66,7 @@ func (e *AnalyticsEngine) ComputeOverviewAggregations(
 		}
 
 		// Provider ID
-		provID := getString(r, "provider_id", "physician_id", "doctor_id", "attending_provider")
+		provID := getString(r, "provider_id", "physician_id", "doctor_id", "attending_provider", "provider_npi")
 		if provID != "" {
 			providerSet[provID] = true
 		}
@@ -103,7 +103,7 @@ func (e *AnalyticsEngine) ComputeOverviewAggregations(
 		}
 
 		// Cost / Billed amount
-		cost := getFloat(r, "billing_amount", "total_charge", "cost", "claim_amount", "charge")
+		cost := getFloat(r, "billing_amount", "total_charge", "cost", "claim_amount", "charge", "total_charges")
 		if cost > 0 {
 			totalCost += cost
 			costCount++
@@ -111,7 +111,7 @@ func (e *AnalyticsEngine) ComputeOverviewAggregations(
 		}
 
 		// Readmission
-		isReadmit := getBool(r, "readmitted", "readmission", "readmission_30d", "is_readmit")
+		isReadmit := getBool(r, "readmitted", "readmission", "readmission_30d", "is_readmit", "is_readmitted_30d")
 		if isReadmit {
 			readmitCount++
 			deptCounts[dept].Readmits++

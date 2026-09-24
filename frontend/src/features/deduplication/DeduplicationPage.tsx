@@ -26,6 +26,7 @@ import {
   resolveDuplicatePair,
   bulkResolveDuplicates,
   fetchMPIRecords,
+  clearDedupeData,
 } from "../../api/dedupeApi";
 import { Dataset } from "../../types/dataset";
 import {
@@ -55,6 +56,7 @@ export const DeduplicationPage: React.FC = () => {
   const [generatingSample, setGeneratingSample] = useState<boolean>(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [bulkResolving, setBulkResolving] = useState<boolean>(false);
+  const [clearingData, setClearingData] = useState<boolean>(false);
 
   // Merge / Golden Record Modal State
   const [activeModalPair, setActiveModalPair] = useState<DuplicatePair | null>(null);
@@ -63,7 +65,7 @@ export const DeduplicationPage: React.FC = () => {
   const [resolutionNotes, setResolutionNotes] = useState<string>("");
 
   // Algorithm Tuning State
-  const [threshold, setThreshold] = useState<number>(0.65);
+  const [threshold, setThreshold] = useState<number>(0.75);
   const [blockingStrategy, setBlockingStrategy] = useState<string>("SOUNDEX_LASTNAME");
   const [weights, setWeights] = useState<DemographicWeights>({
     firstNameWeight: 0.20,
@@ -174,6 +176,7 @@ export const DeduplicationPage: React.FC = () => {
   const handleRunDeduplication = async () => {
     if (!selectedDatasetId) return;
     try {
+      setShowSettings(false);
       setRunningDedupe(true);
       const res = await runDeduplicationAudit(selectedDatasetId, {
         confidenceThreshold: threshold,
@@ -189,6 +192,20 @@ export const DeduplicationPage: React.FC = () => {
       console.error("Deduplication analysis failed:", err);
     } finally {
       setRunningDedupe(false);
+    }
+  };
+
+  const handleClearData = async () => {
+    if (!selectedDatasetId) return;
+    if (!window.confirm("Are you sure you want to permanently delete all deduplication data and MPI records for this dataset?")) return;
+    try {
+      setClearingData(true);
+      await clearDedupeData(selectedDatasetId);
+      await loadDedupeData();
+    } catch (err) {
+      console.error("Failed to clear dedupe data:", err);
+    } finally {
+      setClearingData(false);
     }
   };
 
@@ -360,6 +377,19 @@ export const DeduplicationPage: React.FC = () => {
               <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             </div>
           )}
+
+          <button
+            onClick={handleClearData}
+            disabled={clearingData || !selectedDatasetId}
+            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-rose-200 hover:bg-rose-50 hover:border-rose-300 text-rose-600 text-sm font-semibold rounded-2xl shadow-sm transition-all cursor-pointer disabled:opacity-50"
+          >
+            {clearingData ? (
+              <RotateCcw className="w-4 h-4 animate-spin" />
+            ) : (
+              <X className="w-4 h-4" />
+            )}
+            <span>Clear Data</span>
+          </button>
 
           <button
             onClick={handleRunDeduplication}

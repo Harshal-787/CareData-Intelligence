@@ -685,35 +685,50 @@ func (r *Repository) SaveDuplicatePairs(pairs []domain.DuplicatePair) error {
 		return nil
 	}
 
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	query := `INSERT INTO duplicate_pairs (
+		id, dataset_id, organization_id, record_a_id, record_b_id, record_a_data, record_b_data,
+		confidence_score, field_scores_json, status, resolution_notes, resolved_by, resolved_at,
+		survivor_record_id, golden_record_json, created_at, updated_at
+	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`
+
+	if r.db.Driver == "sqlite3" {
+		query = `INSERT INTO duplicate_pairs (
+			id, dataset_id, organization_id, record_a_id, record_b_id, record_a_data, record_b_data,
+			confidence_score, field_scores_json, status, resolution_notes, resolved_by, resolved_at,
+			survivor_record_id, golden_record_json, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	}
+
+	stmt, err := tx.Prepare(query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
 	for _, p := range pairs {
 		recABytes, _ := json.Marshal(p.RecordAData)
 		recBBytes, _ := json.Marshal(p.RecordBData)
 		fieldScoresBytes, _ := json.Marshal(p.FieldScores)
 		goldenBytes, _ := json.Marshal(p.GoldenRecordData)
-
-		query := `INSERT INTO duplicate_pairs (
-			id, dataset_id, organization_id, record_a_id, record_b_id, record_a_data, record_b_data,
-			confidence_score, field_scores_json, status, resolution_notes, resolved_by, resolved_at,
-			survivor_record_id, golden_record_json, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`
-
-		if r.db.Driver == "sqlite3" {
-			query = `INSERT INTO duplicate_pairs (
-				id, dataset_id, organization_id, record_a_id, record_b_id, record_a_data, record_b_data,
-				confidence_score, field_scores_json, status, resolution_notes, resolved_by, resolved_at,
-				survivor_record_id, golden_record_json, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-		}
-
 		now := time.Now()
-		_, _ = r.db.Exec(query,
+
+		_, err = stmt.Exec(
 			p.ID, p.DatasetID, p.OrganizationID, p.RecordAID, p.RecordBID, string(recABytes), string(recBBytes),
 			p.ConfidenceScore, string(fieldScoresBytes), string(p.Status), p.ResolutionNotes, p.ResolvedBy,
 			p.ResolvedAt, p.SurvivorRecordID, string(goldenBytes), now, now,
 		)
+		if err != nil {
+			return err
+		}
 	}
 
-	return nil
+	return tx.Commit()
 }
 
 func (r *Repository) DeleteDuplicatePairsByDataset(datasetID string) error {
@@ -732,6 +747,39 @@ func (r *Repository) DeletePendingDuplicatePairsByDataset(datasetID string) erro
 	}
 	_, err := r.db.Exec(query, datasetID)
 	return err
+}
+
+func (r *Repository) ClearDedupeDataForDataset(datasetID string) error {
+	var query1, query2 string
+	
+	if datasetID == "ALL" {
+		query1 = `DELETE FROM duplicate_pairs`
+		query2 = `DELETE FROM patient_mpi_records`
+	} else {
+		query1 = `DELETE FROM duplicate_pairs WHERE dataset_id = $1`
+		query2 = `DELETE FROM patient_mpi_records WHERE dataset_id = $1`
+		
+		if r.db.Driver == "sqlite3" {
+			query1 = `DELETE FROM duplicate_pairs WHERE dataset_id = ?`
+			query2 = `DELETE FROM patient_mpi_records WHERE dataset_id = ?`
+		}
+	}
+	
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if datasetID == "ALL" {
+		if _, err := tx.Exec(query1); err != nil { return err }
+		if _, err := tx.Exec(query2); err != nil { return err }
+	} else {
+		if _, err := tx.Exec(query1, datasetID); err != nil { return err }
+		if _, err := tx.Exec(query2, datasetID); err != nil { return err }
+	}
+
+	return tx.Commit()
 }
 
 func (r *Repository) GetResolvedPairsByDataset(datasetID string) (map[string]domain.DuplicatePair, error) {
@@ -1547,6 +1595,38 @@ func (r *Repository) ListMLModelRuns(orgID string) ([]domain.MLModelRun, error) 
 	return runs, nil
 }
 
+func (r *Repository) ClearMLDataForDataset(datasetID string) error {
+	var query1, query2, query3 string
+	var args []interface{}
+
+	if datasetID == "ALL" {
+		query1 = `DELETE FROM ml_anomalies`
+		query2 = `DELETE FROM ml_risk_scores`
+		query3 = `DELETE FROM ml_model_runs`
+	} else {
+		query1 = `DELETE FROM ml_anomalies WHERE dataset_id = $1`
+		query2 = `DELETE FROM ml_risk_scores WHERE dataset_id = $1`
+		query3 = `DELETE FROM ml_model_runs WHERE dataset_id = $1`
+		if r.db.Driver == "sqlite3" {
+			query1 = `DELETE FROM ml_anomalies WHERE dataset_id = ?`
+			query2 = `DELETE FROM ml_risk_scores WHERE dataset_id = ?`
+			query3 = `DELETE FROM ml_model_runs WHERE dataset_id = ?`
+		}
+		args = []interface{}{datasetID}
+	}
+	
+	if _, err := r.db.Exec(query1, args...); err != nil {
+		return err
+	}
+	if _, err := r.db.Exec(query2, args...); err != nil {
+		return err
+	}
+	if _, err := r.db.Exec(query3, args...); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *Repository) SaveMLAnomalies(anomalies []domain.MLAnomaly) error {
 	for _, a := range anomalies {
 		flagsJSON, _ := json.Marshal(a.ExplanationFlags)
@@ -1880,16 +1960,9 @@ func (r *Repository) GetMLOverviewStats(orgID, datasetID string) (*domain.MLOver
 		resp.ModelAucRoc = latestRun.AucRoc
 		resp.GlobalFeatureImportance = latestRun.FeatureImportances
 	} else {
-		resp.ModelAccuracy = 0.942
-		resp.ModelAucRoc = 0.928
-		resp.GlobalFeatureImportance = []domain.MLFeatureImportance{
-			{FeatureName: "Comorbidity Index & Chronic Load", ImportanceWeight: 0.285, Category: "CLINICAL", Direction: "INCREASE"},
-			{FeatureName: "Prior Inpatient Encounters", ImportanceWeight: 0.242, Category: "UTILIZATION", Direction: "INCREASE"},
-			{FeatureName: "Length of Stay (Days)", ImportanceWeight: 0.181, Category: "UTILIZATION", Direction: "INCREASE"},
-			{FeatureName: "Systolic & Diastolic BP Variance", ImportanceWeight: 0.138, Category: "VITALS", Direction: "INCREASE"},
-			{FeatureName: "Total Billed Healthcare Charges", ImportanceWeight: 0.089, Category: "FINANCIAL", Direction: "INCREASE"},
-			{FeatureName: "Patient Age Cohort", ImportanceWeight: 0.065, Category: "DEMOGRAPHIC", Direction: "INCREASE"},
-		}
+		resp.ModelAccuracy = 0.0
+		resp.ModelAucRoc = 0.0
+		resp.GlobalFeatureImportance = []domain.MLFeatureImportance{}
 	}
 
 	// 2. Anomaly counts
@@ -1964,13 +2037,13 @@ func (r *Repository) GetMLOverviewStats(orgID, datasetID string) (*domain.MLOver
 	if avgRisk.Valid {
 		resp.AverageRiskScore = math.Round(avgRisk.Float64*10) / 10
 	} else {
-		resp.AverageRiskScore = 48.5
+		resp.AverageRiskScore = 0.0
 	}
 
 	if resp.TotalInferences > 0 {
 		resp.AnomalyRatePct = math.Round((float64(resp.TotalAnomalies)/float64(resp.TotalInferences))*1000) / 10
 	} else {
-		resp.AnomalyRatePct = 8.2
+		resp.AnomalyRatePct = 0.0
 	}
 
 	var highR, modR, lowR int64

@@ -21,7 +21,11 @@ export const Login: React.FC = () => {
       await login(email, password);
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Invalid email or password');
+      if (!err.response || err.response.status === 504 || err.response.status === 502) {
+        setError('Network Error: Cannot connect to the server (it may still be starting up).');
+      } else {
+        setError(err.response?.data?.error || 'Invalid email or password');
+      }
     } finally {
       setLoading(false);
     }

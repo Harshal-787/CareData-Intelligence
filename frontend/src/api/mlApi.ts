@@ -43,8 +43,8 @@ export const fetchMLRiskScores = async (
   return response.data;
 };
 
-export const fetchMLModels = async (): Promise<{ models: MLModelRun[]; total: number }> => {
-  const response = await api.get('/ml/models');
+export const fetchMLModels = async (datasetId?: string): Promise<{ models: MLModelRun[]; total: number }> => {
+  const response = await api.get('/ml/models', { params: { datasetId } });
   return response.data;
 };
 
@@ -53,5 +53,12 @@ export const triggerMLRun = async (
   req: Partial<MLTrainRequest>
 ): Promise<{ message: string; modelRun: MLModelRun }> => {
   const response = await api.post(`/datasets/${datasetId}/ml/run`, req);
+  return response.data;
+};
+
+export const clearMLData = async (
+  datasetId: string
+): Promise<{ message: string }> => {
+  const response = await api.delete(`/datasets/${datasetId}/ml/data`);
   return response.data;
 };

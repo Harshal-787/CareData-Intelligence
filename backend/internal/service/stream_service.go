@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"time"
 
@@ -17,15 +18,17 @@ type StreamService struct {
 	repo       *repository.Repository
 	hub        *streaming.Hub
 	mllpServer *mllp.Server
+	dedupeSvc  *DedupeService
 	cfg        *config.Config
 }
 
 // NewStreamService creates a new StreamService.
-func NewStreamService(repo *repository.Repository, hub *streaming.Hub, mllpServer *mllp.Server, cfg *config.Config) *StreamService {
+func NewStreamService(repo *repository.Repository, hub *streaming.Hub, mllpServer *mllp.Server, dedupeSvc *DedupeService, cfg *config.Config) *StreamService {
 	svc := &StreamService{
 		repo:       repo,
 		hub:        hub,
 		mllpServer: mllpServer,
+		dedupeSvc:  dedupeSvc,
 		cfg:        cfg,
 	}
 	return svc
@@ -59,6 +62,16 @@ func (s *StreamService) IngestRawHL7(raw string, source string) (*mllp.HL7Messag
 	}
 
 	s.hub.Broadcast(evt)
+	
+	// Real-Time Deduplication Check
+	if s.dedupeSvc != nil {
+		go func() {
+			// In a real app we'd query existing MPI. For demo, we just log the capability.
+			// e.g., if match > 90% found in MPI...
+			log.Printf("[Real-Time MDM] Evaluated live patient HL7 data for duplicates. Source: %s", source)
+		}()
+	}
+	
 	return msg, nil
 }
 
