@@ -153,3 +153,8 @@ export const fetchMPIRecords = async (
     offset: response.data?.offset || 0,
   };
 };
+
+export const clearDedupeData = async (datasetId: string): Promise<{ message: string }> => {
+  const response = await api.delete<{ message: string }>(`/datasets/${datasetId}/deduplicate/data`);
+  return response.data;
+};

@@ -324,3 +324,28 @@ func (h *DedupeHandler) ListMPI(w http.ResponseWriter, r *http.Request) {
 		"offset":  offset,
 	})
 }
+
+// ClearDedupeData godoc
+// @Summary      Clear all deduplication data for a dataset
+// @Description  Deletes all candidate pairs and MPI records associated with the dataset
+// @Tags         Patient Deduplication
+// @Produce      json
+// @Param        id path string true "Dataset ID"
+// @Success      200 {object} map[string]interface{}
+// @Router       /datasets/{id}/deduplicate/data [delete]
+func (h *DedupeHandler) ClearDedupeData(w http.ResponseWriter, r *http.Request) {
+	datasetID := chi.URLParam(r, "id")
+	if datasetID == "" {
+		respondError(w, http.StatusBadRequest, "Dataset ID is required")
+		return
+	}
+
+	if err := h.dedupeService.ClearDedupeData(datasetID); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to clear deduplication data: "+err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "Deduplication data cleared successfully",
+	})
+}

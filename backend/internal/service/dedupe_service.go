@@ -3,6 +3,8 @@ package service
 import (
 	"fmt"
 	"log"
+	"strings"
+	"sync"
 	"time"
 
 	"caredata/backend/internal/config"
@@ -15,16 +17,20 @@ import (
 )
 
 type DedupeService struct {
-	repo    *repository.Repository
-	storage storage.Storage
-	cfg     *config.Config
+	repo          *repository.Repository
+	storage       storage.Storage
+	cfg           *config.Config
+	activeWeights *domain.DemographicWeights
+	mu            sync.RWMutex
 }
 
 func NewDedupeService(repo *repository.Repository, store storage.Storage, cfg *config.Config) *DedupeService {
+	defaultWeights := dedupe.DefaultDemographicWeights()
 	return &DedupeService{
-		repo:    repo,
-		storage: store,
-		cfg:     cfg,
+		repo:          repo,
+		storage:       store,
+		cfg:           cfg,
+		activeWeights: &defaultWeights,
 	}
 }
 
@@ -182,6 +188,8 @@ func (s *DedupeService) ResolveDuplicate(pairID, orgID, userID, userEmail, ipAdd
 			UpdatedAt:        time.Now(),
 		}
 		_ = s.repo.SaveMPIRecord(mpiRecord)
+	} else if req.Action == domain.DuplicateStatusDistinct {
+		s.applyActiveLearning(pair, string(domain.DuplicateStatusDistinct))
 	}
 
 	// Update the duplicate pair record
@@ -237,6 +245,64 @@ func (s *DedupeService) UnresolveDuplicate(pairID, orgID, userID, userEmail, ipA
 	return s.repo.GetDuplicatePairByID(pairID)
 }
 
+// applySurvivorshipRules implements Enterprise MDM survivorship logic
+func (s *DedupeService) applySurvivorshipRules(recA, recB map[string]interface{}) map[string]interface{} {
+	golden := make(map[string]interface{})
+	
+	// Copy Record A as baseline
+	for k, v := range recA {
+		golden[k] = v
+	}
+	
+	// Rule 1: Fill missing fields (Phone, Email, Address, etc.) from Record B
+	for k, v := range recB {
+		valB := fmt.Sprintf("%v", v)
+		valB = strings.TrimSpace(valB)
+		
+		if valB == "" || valB == "<nil>" {
+			continue
+		}
+		
+		valA, exists := golden[k]
+		strA := fmt.Sprintf("%v", valA)
+		strA = strings.TrimSpace(strA)
+		
+		if !exists || strA == "" || strA == "<nil>" {
+			golden[k] = v
+		}
+	}
+	
+	// Future Rules could go here (e.g. prioritize HR source over CRM source)
+	
+	return golden
+}
+
+// applyActiveLearning dynamically adjusts weights based on human stewardship
+func (s *DedupeService) applyActiveLearning(pair *domain.DuplicatePair, action string) {
+	if action != string(domain.DuplicateStatusDistinct) || pair.ConfidenceScore < 0.75 {
+		return // Only learn from high-confidence false positives
+	}
+	
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	log.Printf("[Active Learning] Penalizing weights for pair %s due to DISTINCT resolution", pair.ID)
+	
+	// Lower weights for fields that incorrectly matched
+	for _, fs := range pair.FieldScores {
+		if fs.Match {
+			switch {
+			case strings.Contains(strings.ToLower(fs.FieldName), "first"):
+				s.activeWeights.FirstNameWeight *= 0.95
+			case strings.Contains(strings.ToLower(fs.FieldName), "last"):
+				s.activeWeights.LastNameWeight *= 0.95
+			case strings.Contains(strings.ToLower(fs.FieldName), "dob"):
+				s.activeWeights.DOBWeight *= 0.95
+			}
+		}
+	}
+}
+
 // BulkResolve automatically merges or marks distinct pending pairs meeting confidence criteria
 func (s *DedupeService) BulkResolve(orgID, userID, userEmail, ipAddress string, req domain.BulkResolveRequest) (int64, error) {
 	if req.MinConfidence <= 0 {
@@ -246,9 +312,45 @@ func (s *DedupeService) BulkResolve(orgID, userID, userEmail, ipAddress string, 
 		req.Action = domain.DuplicateStatusMerged
 	}
 
-	count, err := s.repo.BulkResolveDuplicatePairs(orgID, userEmail, req)
+	// Fetch all pending pairs meeting confidence criteria
+	pairs, _, err := s.repo.ListDuplicatePairs(domain.DuplicateFilterParams{
+		OrganizationID: orgID,
+		Status:         string(domain.DuplicateStatusPending),
+		MinConfidence:  req.MinConfidence,
+	})
 	if err != nil {
-		return 0, fmt.Errorf("bulk resolve failed: %w", err)
+		return 0, fmt.Errorf("failed to list pending pairs for bulk resolve: %w", err)
+	}
+
+	var resolvedCount int64 = 0
+	for _, pair := range pairs {
+		if req.Action == domain.DuplicateStatusMerged {
+			goldenData := s.applySurvivorshipRules(pair.RecordAData, pair.RecordBData)
+			
+			mpiRecord := &domain.GoldenRecord{
+				ID:               fmt.Sprintf("mpi-%s", uuid.New().String()[:12]),
+				OrganizationID:   orgID,
+				DatasetID:        pair.DatasetID,
+				ConsolidatedData: goldenData,
+				SourceRecordIDs:  []string{pair.RecordAID, pair.RecordBID},
+				DuplicatePairIDs: []string{pair.ID},
+				CreatedBy:        userEmail,
+				CreatedAt:        time.Now(),
+				UpdatedAt:        time.Now(),
+			}
+			_ = s.repo.SaveMPIRecord(mpiRecord)
+		}
+		
+		resolveReq := domain.ResolveDuplicateRequest{
+			Action:          req.Action,
+			ResolutionNotes: req.ResolutionNotes,
+		}
+		
+		if err := s.repo.ResolveDuplicatePair(pair.ID, orgID, userEmail, resolveReq); err != nil {
+			log.Printf("Failed to resolve pair %s during bulk resolve: %v", pair.ID, err)
+			continue
+		}
+		resolvedCount++
 	}
 
 	// Audit Log
@@ -259,12 +361,12 @@ func (s *DedupeService) BulkResolve(orgID, userID, userEmail, ipAddress string, 
 		UserEmail:      userEmail,
 		Action:         fmt.Sprintf("DUPLICATE_BULK_%s", req.Action),
 		Resource:       "duplicate_pairs:bulk",
-		Details:        fmt.Sprintf("Bulk resolved %d duplicate candidates with threshold >= %.0f%% to %s", count, req.MinConfidence*100, req.Action),
+		Details:        fmt.Sprintf("Bulk resolved %d duplicate candidates with threshold >= %.0f%% to %s", resolvedCount, req.MinConfidence*100, req.Action),
 		IPAddress:      ipAddress,
 		CreatedAt:      time.Now(),
 	})
 
-	return count, nil
+	return resolvedCount, nil
 }
 
 // GetStats returns summary counts and confidence distributions
@@ -275,4 +377,12 @@ func (s *DedupeService) GetStats(orgID, datasetID string) (*domain.Deduplication
 // ListMPIRecords returns consolidated Master Patient Index entries
 func (s *DedupeService) ListMPIRecords(orgID, datasetID string, limit, offset int) ([]domain.GoldenRecord, int64, error) {
 	return s.repo.ListMPIRecords(orgID, datasetID, limit, offset)
+}
+
+// ClearDedupeData deletes all duplicate pairs and MPI records for a dataset
+func (s *DedupeService) ClearDedupeData(datasetID string) error {
+	if datasetID == "" {
+		return fmt.Errorf("datasetID is required")
+	}
+	return s.repo.ClearDedupeDataForDataset(datasetID)
 }

@@ -213,3 +213,28 @@ func (h *MLHandler) TriggerMLRun(w http.ResponseWriter, r *http.Request) {
 		"modelRun": run,
 	})
 }
+
+// ClearMLData handles DELETE /api/v1/datasets/{id}/ml/data
+func (h *MLHandler) ClearMLData(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetUserFromContext(r.Context())
+	if claims == nil {
+		respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	datasetID := chi.URLParam(r, "id")
+	if datasetID == "" {
+		respondError(w, http.StatusBadRequest, "Dataset ID is required")
+		return
+	}
+
+	err := h.mlService.ClearMLDataForDataset(datasetID, claims.OrganizationID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "ML data cleared successfully",
+	})
+}

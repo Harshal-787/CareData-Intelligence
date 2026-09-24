@@ -268,9 +268,10 @@ type PatientRecord struct {
 	Phone       string
 	Address     string
 	MRN         string
-	Gender      string
-	Email       string
-	RawData     map[string]interface{}
+	Gender           string
+	Email            string
+	EmergencyContact string
+	RawData          map[string]interface{}
 }
 
 func ExtractPatientRecord(index int, row map[string]interface{}) PatientRecord {
@@ -325,6 +326,8 @@ func ExtractPatientRecord(index int, row map[string]interface{}) PatientRecord {
 			rec.Gender = valStr
 		case strings.Contains(lowerKey, "email") || strings.Contains(lowerKey, "mail"):
 			rec.Email = valStr
+		case strings.Contains(lowerKey, "emergency") || strings.Contains(lowerKey, "nok") || strings.Contains(lowerKey, "kin"):
+			rec.EmergencyContact = valStr
 		}
 	}
 
@@ -495,6 +498,29 @@ func CompareRecords(a, b PatientRecord, weights domain.DemographicWeights) (floa
 	}
 
 	finalConfidence := weightedSum / totalWeight
+	
+	// Enterprise Graph / Relationship Edge Boost
+	if a.EmergencyContact != "" && b.EmergencyContact != "" {
+		cleanA := strings.ToLower(strings.TrimSpace(a.EmergencyContact))
+		cleanB := strings.ToLower(strings.TrimSpace(b.EmergencyContact))
+		if cleanA == cleanB {
+			// Massive boost for shared exact emergency contact (simulating Graph Relationship)
+			finalConfidence += 0.20
+			fieldScores = append(fieldScores, domain.FieldSimilarityScore{
+				FieldName: "Emergency Contact (Graph Edge)",
+				Score:     100.0,
+				Match:     true,
+				ValA:      a.EmergencyContact,
+				ValB:      b.EmergencyContact,
+			})
+		}
+	}
+	
+	// Cap at 1.0
+	if finalConfidence > 1.0 {
+		finalConfidence = 1.0
+	}
+
 	return round4(finalConfidence), fieldScores
 }
 
@@ -598,18 +624,34 @@ func GenerateCandidatePairs(rows []map[string]interface{}, datasetID, orgID stri
 	}
 
 	// Populate candidate comparison pool
-	if len(rows) <= 300 {
-		// For small/medium demo datasets, perform exhaustive N*(N-1)/2 comparison for maximum accuracy
+	if (config.BlockingStrategy == "ALL" && len(rows) <= 1000) || (config.BlockingStrategy == "" && len(rows) <= 300) {
+		// Exhaustive scan (only allowed for small datasets <= 1000 rows, otherwise defaults to blocking to prevent CPU/memory exhaustion)
 		for i := 0; i < len(records); i++ {
 			for j := i + 1; j < len(records); j++ {
 				pairMap[PairKey{i, j}] = true
 			}
 		}
 	} else {
-		addPairsFromBlocks(soundexBlocks)
-		addPairsFromBlocks(dobBlocks)
-		addPairsFromBlocks(firstInitialBlocks)
-		addPairsFromBlocks(phoneBlocks)
+		// Force fallback to safe blocking strategies if they tried exhaustive on massive datasets
+		if config.BlockingStrategy == "ALL" {
+			config.BlockingStrategy = "SOUNDEX_LASTNAME" // default safe fallback
+		}
+		switch config.BlockingStrategy {
+		case "SOUNDEX_LASTNAME":
+			addPairsFromBlocks(soundexBlocks)
+			addPairsFromBlocks(dobBlocks)
+		case "BIRTH_YEAR":
+			addPairsFromBlocks(dobBlocks)
+			addPairsFromBlocks(firstInitialBlocks)
+		case "FIRST_INITIAL_ZIP":
+			addPairsFromBlocks(firstInitialBlocks)
+			addPairsFromBlocks(phoneBlocks) // Using phone as fallback proxy for zip
+		default:
+			addPairsFromBlocks(soundexBlocks)
+			addPairsFromBlocks(dobBlocks)
+			addPairsFromBlocks(firstInitialBlocks)
+			addPairsFromBlocks(phoneBlocks)
+		}
 	}
 
 	// 3. Compare candidate pairs and filter by confidence threshold

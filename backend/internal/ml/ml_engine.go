@@ -55,20 +55,51 @@ func (e *MLEngine) RunPipeline(datasetID, datasetName, orgID, objectName string,
 	
 	var res struct {
 		ModelRun struct {
-			Algorithm     string  `json:"Algorithm"`
-			Accuracy      float64 `json:"Accuracy"`
-			Contamination float64 `json:"Contamination"`
-			NEstimators   int     `json:"NEstimators"`
-			AnomalyCount  int     `json:"AnomalyCount"`
-			TotalRecords  int     `json:"TotalRecords"`
+			ID                 string                       `json:"id"`
+			ModelName          string                       `json:"modelName"`
+			ModelType          string                       `json:"modelType"`
+			Status             domain.MLModelStatus         `json:"status"`
+			Accuracy           float64                      `json:"accuracy"`
+			F1Score            float64                      `json:"f1Score"`
+			AucRoc             float64                      `json:"aucRoc"`
+			Contamination      float64                      `json:"contamination"`
+			NEstimators        int                          `json:"nEstimators"`
+			AnomalyCount       int64                        `json:"anomalyCount"`
+			TotalRecords       int64                        `json:"totalRecords"`
+			Hyperparameters    map[string]interface{}       `json:"hyperparameters"`
+			FeatureImportances []domain.MLFeatureImportance `json:"featureImportances"`
 		} `json:"modelRun"`
-		Results []struct {
-			RecordID     string                 `json:"record_id"`
-			IsAnomaly    bool                   `json:"is_anomaly"`
-			AnomalyScore float64                `json:"anomaly_score"`
-			LaceScore    int                    `json:"lace_score"`
-			RawData      map[string]interface{} `json:"raw_data"`
-		} `json:"results"`
+		Anomalies []struct {
+			ID               string                   `json:"id"`
+			RecordID         string                   `json:"recordId"`
+			RowNumber        int                      `json:"rowNumber"`
+			PatientID        string                   `json:"patientId"`
+			EncounterID      string                   `json:"encounterId"`
+			PatientName      string                   `json:"patientName"`
+			AnomalyScore     float64                  `json:"anomalyScore"`
+			Severity         domain.MLAnomalySeverity `json:"severity"`
+			Category         domain.MLAnomalyCategory `json:"category"`
+			Description      string                   `json:"description"`
+			ExplanationFlags []string                 `json:"explanationFlags"`
+			RecordData       map[string]interface{}   `json:"recordData"`
+			Status           domain.MLAnomalyStatus   `json:"status"`
+		} `json:"anomalies"`
+		RiskScores []struct {
+			ID                      string                 `json:"id"`
+			PatientID               string                 `json:"patientId"`
+			EncounterID             string                 `json:"encounterId"`
+			PatientName             string                 `json:"patientName"`
+			Age                     int                    `json:"age"`
+			Gender                  string                 `json:"gender"`
+			PrimaryDiagnosis        string                 `json:"primaryDiagnosis"`
+			RiskScore               float64                `json:"riskScore"`
+			RiskTier                domain.MLRiskTier      `json:"riskTier"`
+			ReadmissionProbability  float64                `json:"readmissionProbability"`
+			PredictedLOSDays        float64                `json:"predictedLOSDays"`
+			TopDrivers              []domain.MLRiskDriver  `json:"topDrivers"`
+			ClinicalRecommendations []string               `json:"clinicalRecommendations"`
+			RecordData              map[string]interface{} `json:"recordData"`
+		} `json:"riskScores"`
 	}
 	
 	if err := json.NewDecoder(httpResp.Body).Decode(&res); err != nil {
@@ -79,94 +110,71 @@ func (e *MLEngine) RunPipeline(datasetID, datasetName, orgID, objectName string,
 	now := time.Now()
 	
 	var anomalies []domain.MLAnomaly
-	var riskScores []domain.MLRiskScore
+	for _, a := range res.Anomalies {
+		anomalies = append(anomalies, domain.MLAnomaly{
+			ID:               a.ID,
+			ModelRunID:       runID,
+			DatasetID:        datasetID,
+			DatasetName:      datasetName,
+			OrganizationID:   orgID,
+			RecordID:         a.RecordID,
+			RowNumber:        a.RowNumber,
+			PatientID:        a.PatientID,
+			EncounterID:      a.EncounterID,
+			PatientName:      a.PatientName,
+			AnomalyScore:     a.AnomalyScore,
+			Severity:         a.Severity,
+			Category:         a.Category,
+			Description:      a.Description,
+			ExplanationFlags: a.ExplanationFlags,
+			RecordData:       a.RecordData,
+			Status:           a.Status,
+			CreatedAt:        now,
+		})
+	}
 
-	for idx, result := range res.Results {
-		patientID := fmt.Sprintf("MRN-%05d", 10000+idx+1)
-		patientName := fmt.Sprintf("Patient %04d", idx+1)
-		encounterID := fmt.Sprintf("ENC-%05d", 20000+idx+1)
-		
-		if result.IsAnomaly {
-			anomalies = append(anomalies, domain.MLAnomaly{
-				ID:               fmt.Sprintf("anom-%d-%d", now.Unix(), idx+1),
-				ModelRunID:       runID,
-				DatasetID:        datasetID,
-				DatasetName:      datasetName,
-				OrganizationID:   orgID,
-				RecordID:         result.RecordID,
-				RowNumber:        idx + 1,
-				PatientID:        patientID,
-				EncounterID:      encounterID,
-				PatientName:      patientName,
-				AnomalyScore:     result.AnomalyScore,
-				Severity:         domain.MLAnomalySeverityWarning,
-				Category:         domain.MLAnomalyCategoryClinicalVitals,
-				Description:      "Flagged as statistical outlier by Isolation Forest",
-				ExplanationFlags: []string{"High isolation degree"},
-				RecordData:       result.RawData,
-				Status:           domain.MLAnomalyStatusPendingReview,
-				CreatedAt:        now,
-			})
-		}
-		
-		// For risk scores, we map the LACE score to a risk tier
-		var tier domain.MLRiskTier
-		if result.LaceScore >= 10 {
-			tier = domain.MLRiskTierHigh
-		} else if result.LaceScore >= 5 {
-			tier = domain.MLRiskTierModerate
-		} else {
-			tier = domain.MLRiskTierLow
-		}
-		
-		var age int = 50
-		if ageVal, ok := result.RawData["age"].(float64); ok {
-			age = int(ageVal)
-		}
-		
+	var riskScores []domain.MLRiskScore
+	for _, r := range res.RiskScores {
 		riskScores = append(riskScores, domain.MLRiskScore{
-			ID:                      fmt.Sprintf("risk-%d-%d", now.Unix(), idx+1),
+			ID:                      r.ID,
 			ModelRunID:              runID,
 			DatasetID:               datasetID,
 			DatasetName:             datasetName,
 			OrganizationID:          orgID,
-			PatientID:               patientID,
-			EncounterID:             encounterID,
-			PatientName:             patientName,
-			Age:                     age,
-			Gender:                  "Unknown",
-			PrimaryDiagnosis:        "Encounter",
-			RiskScore:               float64(result.LaceScore) * 5.0, // Scale 0-100
-			RiskTier:                tier,
-			ReadmissionProbability:  float64(result.LaceScore) / 20.0,
-			PredictedLOSDays:        5.0,
-			TopDrivers:              []domain.MLRiskDriver{},
-			ClinicalRecommendations: []string{"Follow standard protocol"},
-			RecordData:              result.RawData,
+			PatientID:               r.PatientID,
+			EncounterID:             r.EncounterID,
+			PatientName:             r.PatientName,
+			Age:                     r.Age,
+			Gender:                  r.Gender,
+			PrimaryDiagnosis:        r.PrimaryDiagnosis,
+			RiskScore:               r.RiskScore,
+			RiskTier:                r.RiskTier,
+			ReadmissionProbability:  r.ReadmissionProbability,
+			PredictedLOSDays:        r.PredictedLOSDays,
+			TopDrivers:              r.TopDrivers,
+			ClinicalRecommendations: r.ClinicalRecommendations,
+			RecordData:              r.RecordData,
 			CreatedAt:               now,
 		})
 	}
 	
 	modelRun := &domain.MLModelRun{
-		ID:             runID,
-		OrganizationID: orgID,
-		DatasetID:      datasetID,
-		DatasetName:    datasetName,
-		ModelName:      "CareData Enterprise ML Pipeline v2.0",
-		ModelType:      res.ModelRun.Algorithm,
-		Status:         domain.MLModelStatusCompleted,
-		Accuracy:       res.ModelRun.Accuracy,
-		F1Score:        0.0,
-		AucRoc:         0.0,
-		Contamination:  res.ModelRun.Contamination,
-		NEstimators:    res.ModelRun.NEstimators,
-		AnomalyCount:   int64(res.ModelRun.AnomalyCount),
-		TotalRecords:   int64(res.ModelRun.TotalRecords),
-		Hyperparameters: map[string]interface{}{
-			"n_estimators":  res.ModelRun.NEstimators,
-			"contamination": res.ModelRun.Contamination,
-		},
-		FeatureImportances: []domain.MLFeatureImportance{},
+		ID:                 runID,
+		OrganizationID:     orgID,
+		DatasetID:          datasetID,
+		DatasetName:        datasetName,
+		ModelName:          res.ModelRun.ModelName,
+		ModelType:          res.ModelRun.ModelType,
+		Status             : res.ModelRun.Status,
+		Accuracy:           res.ModelRun.Accuracy,
+		F1Score:            res.ModelRun.F1Score,
+		AucRoc:             res.ModelRun.AucRoc,
+		Contamination:      res.ModelRun.Contamination,
+		NEstimators:        res.ModelRun.NEstimators,
+		AnomalyCount:       res.ModelRun.AnomalyCount,
+		TotalRecords:       res.ModelRun.TotalRecords,
+		Hyperparameters:    res.ModelRun.Hyperparameters,
+		FeatureImportances: res.ModelRun.FeatureImportances,
 		CreatedAt:          now,
 		CompletedAt:        &now,
 	}
