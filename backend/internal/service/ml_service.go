@@ -27,7 +27,8 @@ func NewMLService(repo *repository.Repository, store storage.Storage, cfg *confi
 		cfg:    cfg,
 		engine: ml.NewMLEngine(),
 	}
-	s.ensureSeedData()
+	// We no longer automatically seed ML data on startup so that when a user clears data, it stays cleared.
+	// s.ensureSeedData()
 	return s
 }
 
