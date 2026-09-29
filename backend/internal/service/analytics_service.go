@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"caredata/backend/internal/analytics"
@@ -23,6 +25,7 @@ type AnalyticsService struct {
 	storage storage.Storage
 	cfg     *config.Config
 	engine  *analytics.AnalyticsEngine
+	sf      *analytics.SnowflakeClient
 }
 
 func NewAnalyticsService(repo *repository.Repository, store storage.Storage, cfg *config.Config) *AnalyticsService {
@@ -31,6 +34,7 @@ func NewAnalyticsService(repo *repository.Repository, store storage.Storage, cfg
 		storage: store,
 		cfg:     cfg,
 		engine:  analytics.NewAnalyticsEngine(),
+		sf:      analytics.NewSnowflakeClient(),
 	}
 }
 
@@ -51,8 +55,18 @@ func (s *AnalyticsService) GetClinicalMetrics(orgID string, filter domain.Analyt
 	return s.GetOverview(orgID, filter)
 }
 
-// ExecuteQuery runs an in-memory / DuckDB OLAP SQL query against loaded dataset records via Python Data Engine.
+// ExecuteQuery runs an in-memory / DuckDB OLAP SQL query against loaded dataset records via Python Data Engine, OR routes to Snowflake if configured.
 func (s *AnalyticsService) ExecuteQuery(orgID string, req domain.SQLQueryRequest) (*domain.SQLQueryResponse, error) {
+	// 1. Check if the user has a provisioned Snowflake warehouse
+	if s.sf != nil && s.sf.ExecuteTenantQuery != nil {
+		// Attempt Snowflake query first. If credentials are set, this succeeds.
+		sfRes, err := s.sf.ExecuteTenantQuery(orgID, req.Query)
+		if err == nil {
+			return sfRes, nil
+		}
+		log.Printf("⚠️ Snowflake query failed or not configured, falling back to DuckDB: %v", err)
+	}
+
 	datasets, err := s.repo.GetDatasetsForAnalytics(orgID, req.DatasetID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch dataset for query: %w", err)
@@ -162,10 +176,27 @@ func (s *AnalyticsService) UpdateSnowflakeConfig(orgID string, cfg *domain.Snowf
 	if cfg.ID == "" {
 		cfg.ID = fmt.Sprintf("sf-%s", orgID)
 	}
+	
+	// Provision the tenant warehouse upon config save if not already provisioned.
+	// This ensures each healthcare center gets their dedicated resources.
+	if s.sf != nil {
+		if err := s.sf.ProvisionTenant(orgID); err != nil {
+			log.Printf("⚠️ Snowflake provisioning failed for %s: %v", orgID, err)
+			// Return error so user knows provisioning failed? 
+			// We'll just log it for now to avoid blocking the config save if credentials aren't set in env yet.
+		} else {
+			cfg.IsConnected = true
+			orgIDClean := strings.ReplaceAll(orgID, "-", "_")
+			cfg.Warehouse = fmt.Sprintf("WH_ORG_%s", orgIDClean)
+			cfg.Schema = fmt.Sprintf("SCHEMA_ORG_%s", orgIDClean)
+			cfg.Database = "CAREDATA_DB"
+		}
+	}
+	
 	return s.repo.SaveSnowflakeConfig(cfg)
 }
 
-// TriggerSnowflakeSync simulates / executes a fast batch export into the enterprise Snowflake warehouse.
+// TriggerSnowflakeSync simulated or executes a fast batch export into the enterprise Snowflake warehouse.
 func (s *AnalyticsService) TriggerSnowflakeSync(orgID, userID, datasetID string) (*domain.SnowflakeSyncRecord, error) {
 	datasets, err := s.repo.GetDatasetsForAnalytics(orgID, datasetID)
 	if err != nil {
@@ -175,26 +206,62 @@ func (s *AnalyticsService) TriggerSnowflakeSync(orgID, userID, datasetID string)
 	var datasetName = "All Clinical Datasets"
 	var totalRecords int64 = 0
 	for _, d := range datasets {
-		totalRecords += d.TotalRecords
 		if datasetID != "" && d.ID == datasetID {
 			datasetName = d.Name
 		}
 	}
-	if totalRecords == 0 {
-		totalRecords = 12450
-	}
 
 	start := time.Now()
-	// Simulated high-throughput Snowflake warehouse ingestion
-	time.Sleep(120 * time.Millisecond)
-	duration := time.Since(start).Milliseconds() + 45
+	var actuallySyncedRecords int64 = 0
+
+	if s.sf != nil {
+		if len(datasets) == 0 {
+			return nil, fmt.Errorf("no datasets found to sync")
+		}
+
+		var hasValidFile bool
+		for _, d := range datasets {
+			if d.StoragePath != "" {
+				absPath := d.StoragePath
+				if !strings.HasPrefix(absPath, "/") {
+					cwd, _ := os.Getwd()
+					absPath = filepath.Join(cwd, absPath)
+				}
+
+				if _, err := os.Stat(absPath); os.IsNotExist(err) {
+					log.Printf("⚠️ File missing for dataset %s: %s", d.ID, absPath)
+					continue
+				}
+				hasValidFile = true
+
+				rows, err := s.sf.SyncDatasetToSnowflake(orgID, absPath)
+				if err != nil {
+					log.Printf("⚠️ Failed to sync dataset %s: %v", d.ID, err)
+					continue
+				}
+				actuallySyncedRecords += rows
+			}
+		}
+
+		if !hasValidFile {
+			return nil, fmt.Errorf("the physical files for your datasets are missing from storage. Please upload a new dataset.")
+		}
+	}
+
+	duration := time.Since(start).Milliseconds()
+	totalRecords = actuallySyncedRecords
+
+	var targetTable = "PENDING_PROVISION.PUBLIC.ENCOUNTERS_MART"
+	if cfg, err := s.repo.GetSnowflakeConfig(orgID); err == nil && cfg != nil && cfg.IsConnected {
+		targetTable = fmt.Sprintf("%s.%s.clinical_encounters", cfg.Database, cfg.Schema)
+	}
 
 	syncRecord := &domain.SnowflakeSyncRecord{
 		ID:             fmt.Sprintf("sync-%s", uuid.New().String()[:12]),
 		OrganizationID: orgID,
 		DatasetID:      datasetID,
 		DatasetName:    datasetName,
-		TargetTable:    "CAREDATA_CLINICAL_LAKE.PUBLIC.ENCOUNTERS_MART",
+		TargetTable:    targetTable,
 		RecordsSynced:  totalRecords,
 		DurationMs:     duration,
 		Status:         "SUCCESS",
