@@ -31,6 +31,7 @@ import {
   executeOlapQuery,
   fetchSnowflakeStatus,
   triggerSnowflakeSync,
+  updateSnowflakeConfig,
 } from '../../api/analyticsApi';
 import {
   AnalyticsOverviewResponse,
@@ -63,6 +64,7 @@ export const AnalyticsPage: React.FC = () => {
   const [snowflakeData, setSnowflakeData] = useState<SnowflakeStatusResponse | null>(null);
   const [syncingSnowflake, setSyncingSnowflake] = useState<boolean>(false);
   const [syncSuccessMessage, setSyncSuccessMessage] = useState<string | null>(null);
+  const [provisioning, setProvisioning] = useState<boolean>(false);
 
   // Load Overview Data
   const loadAnalytics = async () => {
@@ -140,6 +142,33 @@ export const AnalyticsPage: React.FC = () => {
       alert(err.response?.data?.error || 'Failed to trigger Snowflake sync');
     } finally {
       setSyncingSnowflake(false);
+    }
+  };
+
+  // Provision Tenant Warehouse
+  const handleProvisionWarehouse = async () => {
+    try {
+      setProvisioning(true);
+      await updateSnowflakeConfig({
+        id: '',
+        organizationId: '',
+        account: '',
+        warehouse: '',
+        database: '',
+        schema: '',
+        role: '',
+        username: '',
+        isConnected: false,
+        autoSync: true,
+        syncInterval: 'DAILY (Midnight UTC)',
+        updatedAt: new Date().toISOString(),
+      });
+      alert('Provisioning initiated successfully! Refreshing status...');
+      await loadSnowflake();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to provision warehouse');
+    } finally {
+      setProvisioning(false);
     }
   };
 
@@ -838,29 +867,35 @@ export const AnalyticsPage: React.FC = () => {
                   <Server className="w-5 h-5 text-cyan-600" />
                   <h2 className="text-base font-bold text-slate-900">Snowflake Warehouse Connector</h2>
                 </div>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-600 border border-emerald-200 text-xs font-semibold flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> Connected
-                </span>
+                {snowflakeData?.config?.isConnected ? (
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-600 border border-emerald-200 text-xs font-semibold flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> Connected
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200 text-xs font-semibold flex items-center gap-1">
+                    <Server className="w-3 h-3" /> Not Connected
+                  </span>
+                )}
               </div>
 
               <div className="space-y-3 text-xs">
                 <div className="flex justify-between py-1.5 border-b border-slate-200">
                   <span className="text-slate-400">Account:</span>
                   <span className="font-mono text-slate-700 truncate max-w-[220px]">
-                    {snowflakeData?.config?.account || 'caredata-health.us-east-1.snowflakecomputing.com'}
+                    {snowflakeData?.config?.account || 'Not configured'}
                   </span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-slate-200">
                   <span className="text-slate-400">Warehouse:</span>
-                  <span className="font-mono text-cyan-600">{snowflakeData?.config?.warehouse || 'COMPUTE_WH'}</span>
+                  <span className="font-mono text-cyan-600">{snowflakeData?.config?.warehouse || 'Pending Provisioning...'}</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-slate-200">
                   <span className="text-slate-400">Database:</span>
-                  <span className="font-mono text-slate-700">{snowflakeData?.config?.database || 'CAREDATA_CLINICAL_LAKE'}</span>
+                  <span className="font-mono text-slate-700">{snowflakeData?.config?.database || 'Pending...'}</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-slate-200">
                   <span className="text-slate-400">Schema:</span>
-                  <span className="font-mono text-slate-700">{snowflakeData?.config?.schema || 'PUBLIC'}</span>
+                  <span className="font-mono text-slate-700">{snowflakeData?.config?.schema || 'Pending...'}</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-slate-200">
                   <span className="text-slate-400">Auto-Sync Schedule:</span>
@@ -868,11 +903,22 @@ export const AnalyticsPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-2 flex flex-col gap-3">
+                {!snowflakeData?.config?.isConnected && (
+                  <button
+                    onClick={handleProvisionWarehouse}
+                    disabled={provisioning}
+                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white text-xs font-bold shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  >
+                    <Server className={`w-4 h-4 ${provisioning ? 'animate-pulse' : ''}`} />
+                    {provisioning ? 'Provisioning...' : 'Provision Dedicated Warehouse'}
+                  </button>
+                )}
+
                 <button
                   onClick={handleTriggerSync}
-                  disabled={syncingSnowflake}
-                  className="w-full py-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs font-bold shadow-sm shadow-blue-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  disabled={syncingSnowflake || !snowflakeData?.config?.isConnected}
+                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs font-bold shadow-sm shadow-blue-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
                 >
                   <CloudLightning className={`w-4 h-4 ${syncingSnowflake ? 'animate-spin' : ''}`} />
                   {syncingSnowflake ? 'Syncing to Snowflake...' : 'Sync Dataset Aggregations Now'}

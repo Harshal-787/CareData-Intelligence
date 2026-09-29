@@ -109,8 +109,8 @@ export const QualityPage: React.FC = () => {
       ]);
       setReport(reportData);
       setRules(rulesData);
-      setViolations(violationsData.violations);
-      setViolationsTotal(violationsData.total);
+      setViolations(violationsData.violations || []);
+      setViolationsTotal(violationsData.total || 0);
 
       if (reportData.columnProfiles && reportData.columnProfiles.length > 0) {
         setSelectedColumnName(reportData.columnProfiles[0].columnName);
@@ -135,8 +135,8 @@ export const QualityPage: React.FC = () => {
         }),
       ]);
       setRules(rulesData);
-      setViolations(violationsData.violations);
-      setViolationsTotal(violationsData.total);
+      setViolations(violationsData.violations || []);
+      setViolationsTotal(violationsData.total || 0);
     } catch (err) {
       console.error("Audit execution failed:", err);
     } finally {
@@ -291,7 +291,7 @@ export const QualityPage: React.FC = () => {
     report?.columnProfiles?.find((c) => c.columnName === selectedColumnName) ||
     report?.columnProfiles?.[0];
 
-  const filteredViolations = violations.filter((v) => {
+  const filteredViolations = (violations || []).filter((v) => {
     if (violationSeverityFilter && v.severity !== violationSeverityFilter)
       return false;
     if (violationSearch) {
