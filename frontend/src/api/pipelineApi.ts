@@ -49,4 +49,10 @@ export const pipelineApi = {
     const res = await api.get(`/pipelines/${id}/logs`);
     return res.data;
   },
+
+  // Delete a pipeline execution run
+  delete: async (id: string): Promise<{ message: string }> => {
+    const res = await api.delete(`/pipelines/${id}`);
+    return res.data;
+  },
 };

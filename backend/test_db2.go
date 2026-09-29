@@ -8,11 +8,11 @@ import (
 )
 
 func main() {
-	// Connect to postgres running on localhost:5440
+	// Connect to postgres running on localhost:5432
 	// The credentials can be taken from the make run output
 	// Wait, we got authentication failed on postgres/postgres.
 	// But let's check .env in CareData-Intelligence
-	db, err := sql.Open("postgres", "host=localhost user=postgres password=postgres dbname=caredata port=5440 sslmode=disable")
+	db, err := sql.Open("postgres", "host=localhost user=postgres password=postgres dbname=caredata port=5432 sslmode=disable")
 	if err != nil {
 		log.Fatal(err)
 	}

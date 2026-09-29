@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	db, err := sql.Open("postgres", "host=localhost user=postgres password=postgres dbname=caredata port=5440 sslmode=disable")
+	db, err := sql.Open("postgres", "host=localhost user=postgres password=postgres dbname=caredata port=5432 sslmode=disable")
 	if err != nil {
 		log.Fatal(err)
 	}

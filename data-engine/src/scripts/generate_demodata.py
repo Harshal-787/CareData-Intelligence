@@ -227,7 +227,7 @@ def main():
         user="caredata_admin",
         password="caredata_secure_pass123",
         host="localhost",
-        port=5440
+        port=5432
     )
     cur = conn.cursor()
     dataset_id = "ds-demo-101"

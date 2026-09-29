@@ -219,6 +219,7 @@ func main() {
 			r.Post("/pipelines/run", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(pipelineH.Trigger)).ServeHTTP)
 			r.Post("/pipelines/{id}/retry", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(pipelineH.Retry)).ServeHTTP)
 			r.Post("/pipelines/{id}/cancel", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(pipelineH.Cancel)).ServeHTTP)
+			r.Delete("/pipelines/{id}", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(pipelineH.Delete)).ServeHTTP)
 
 			// Phase 9: Real-Time Stream Ingestion & Live HL7/FHIR MLLP Monitor
 			r.Get("/stream/stats", streamH.GetStats)

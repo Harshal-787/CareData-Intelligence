@@ -7,7 +7,7 @@ try:
         user="postgres",
         password="password", # Try password since postgres didn't work
         host="localhost",
-        port="5440"
+        port="5432"
     )
     cur = conn.cursor()
     cur.execute("SELECT profiling_json FROM quality_reports WHERE dataset_id = 'ds-demo-101'")

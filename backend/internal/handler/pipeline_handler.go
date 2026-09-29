@@ -75,6 +75,24 @@ func (h *PipelineHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, job)
 }
 
+// Delete handles DELETE /api/v1/pipelines/{id}
+func (h *PipelineHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetUserFromContext(r.Context())
+	if claims == nil {
+		respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	err := h.pipelineService.DeletePipeline(id)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": "Pipeline deleted"})
+}
+
 // GetStats handles GET /api/v1/pipelines/stats
 func (h *PipelineHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.GetUserFromContext(r.Context())
