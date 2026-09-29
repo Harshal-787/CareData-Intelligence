@@ -104,7 +104,20 @@ func (d *DB) migrate() error {
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,
 			slug TEXT NOT NULL UNIQUE,
+			is_active BOOLEAN NOT NULL DEFAULT FALSE,
 			created_at TIMESTAMP NOT NULL,
+			updated_at TIMESTAMP NOT NULL
+		);`,
+		`CREATE TABLE IF NOT EXISTS platform_settings (
+			id TEXT PRIMARY KEY,
+			platform_name TEXT NOT NULL DEFAULT 'CareData Intelligence Core',
+			support_email TEXT NOT NULL DEFAULT 'support@caredata.ai',
+			maintenance_mode BOOLEAN NOT NULL DEFAULT FALSE,
+			enforce_2fa_globally BOOLEAN NOT NULL DEFAULT FALSE,
+			session_timeout_mins INTEGER NOT NULL DEFAULT 30,
+			gemini_api_key TEXT NOT NULL DEFAULT '',
+			default_llm_model TEXT NOT NULL DEFAULT 'gemini-1.5-pro',
+			llm_temperature REAL NOT NULL DEFAULT 0.2,
 			updated_at TIMESTAMP NOT NULL
 		);`,
 		`CREATE TABLE IF NOT EXISTS users (
@@ -113,12 +126,20 @@ func (d *DB) migrate() error {
 			email TEXT NOT NULL UNIQUE,
 			password_hash TEXT NOT NULL,
 			full_name TEXT NOT NULL,
+			job_title TEXT NOT NULL DEFAULT '',
+			department TEXT NOT NULL DEFAULT '',
+			npi_number TEXT NOT NULL DEFAULT '',
+			phone TEXT NOT NULL DEFAULT '',
 			role TEXT NOT NULL,
 			is_active BOOLEAN NOT NULL DEFAULT TRUE,
 			created_at TIMESTAMP NOT NULL,
 			updated_at TIMESTAMP NOT NULL,
 			FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
 		);`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS job_title TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS department TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS npi_number TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';`,
 		`CREATE TABLE IF NOT EXISTS audit_logs (
 			id TEXT PRIMARY KEY,
 			organization_id TEXT NOT NULL,
@@ -457,6 +478,28 @@ func (d *DB) seedDemoData() error {
 				_, _ = d.Exec(query, u.ID, orgID, u.Email, string(hashedPass), u.FullName, string(u.Role), true, now, now)
 			}
 		}
+	}
+
+	// 3. Seed Default Platform Settings
+	var sCount int
+	if d.Driver == "postgres" {
+		_ = d.QueryRow("SELECT COUNT(*) FROM platform_settings WHERE id = 'global-config-1'").Scan(&sCount)
+	} else {
+		_ = d.QueryRow("SELECT COUNT(*) FROM platform_settings WHERE id = 'global-config-1'").Scan(&sCount)
+	}
+
+	if sCount == 0 {
+		query := `
+			INSERT INTO platform_settings (id, platform_name, support_email, maintenance_mode, enforce_2fa_globally, session_timeout_mins, gemini_api_key, default_llm_model, llm_temperature, updated_at)
+			VALUES ('global-config-1', 'CareData Intelligence Core', 'support@caredata.ai', FALSE, FALSE, 30, '', 'gemini-1.5-pro', 0.2, $1)
+		`
+		if d.Driver == "sqlite3" {
+			query = `
+				INSERT INTO platform_settings (id, platform_name, support_email, maintenance_mode, enforce_2fa_globally, session_timeout_mins, gemini_api_key, default_llm_model, llm_temperature, updated_at)
+				VALUES ('global-config-1', 'CareData Intelligence Core', 'support@caredata.ai', FALSE, FALSE, 30, '', 'gemini-1.5-pro', 0.2, ?)
+			`
+		}
+		_, _ = d.Exec(query, now)
 	}
 
 	log.Println("✓ Seeded default demo organizations and 4 RBAC user accounts")

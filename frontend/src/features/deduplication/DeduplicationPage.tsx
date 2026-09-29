@@ -176,7 +176,6 @@ export const DeduplicationPage: React.FC = () => {
   const handleRunDeduplication = async () => {
     if (!selectedDatasetId) return;
     try {
-      setShowSettings(false);
       setRunningDedupe(true);
       const res = await runDeduplicationAudit(selectedDatasetId, {
         confidenceThreshold: threshold,

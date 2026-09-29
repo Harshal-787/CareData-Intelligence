@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { Link } from 'react-router-dom';
 import api from '../../api/client';
-import { ArrowRight, ArrowLeft, Database, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { Role } from '../../types/auth';
 
 export const Register: React.FC = () => {
-  const navigate = useNavigate();
-  const { login } = useAuth();
+  // Variables removed
 
   // Wizard State
   const [step, setStep] = useState(1);
@@ -18,7 +16,13 @@ export const Register: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<Role>('DATA_ANALYST');
+  const [role] = useState<Role>('VIEWER');
+  
+  // Professional State
+  const [jobTitle, setJobTitle] = useState('');
+  const [department, setDepartment] = useState('');
+  const [npiNumber, setNpiNumber] = useState('');
+  const [phone, setPhone] = useState('');
   
   // Org State
   const [orgMode, setOrgMode] = useState<'CREATE' | 'JOIN'>('JOIN');
@@ -46,6 +50,7 @@ export const Register: React.FC = () => {
           fullName,
           email,
           password,
+          jobTitle, department, npiNumber, phone
         });
       } else {
         await api.post('/auth/register/user', {
@@ -54,11 +59,10 @@ export const Register: React.FC = () => {
           email,
           password,
           role,
+          jobTitle, department, npiNumber, phone
         });
       }
-      
-      await login(email, password);
-      navigate('/dashboard');
+      setStep(4);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed');
     } finally {
@@ -68,26 +72,30 @@ export const Register: React.FC = () => {
 
   return (
     <>
-      <p className="text-[11px] font-bold uppercase tracking-[.16em] text-cyan-600">
-        Workspace Setup
-      </p>
-      <h2 className="mt-2 text-3xl font-bold tracking-[-.05em]">
-        {step === 1 && "Create your workspace"}
-        {step === 2 && "Select your role"}
-        {step === 3 && "Join organization"}
-      </h2>
-      <p className="mt-3 text-sm text-slate-400">
-        {step === 1 && "Start building a clearer clinical data foundation."}
-        {step === 2 && "Choose your primary function within the platform."}
-        {step === 3 && "Connect to your hospital network workspace."}
-      </p>
+      {step < 4 && (
+        <>
+          <p className="text-[11px] font-bold uppercase tracking-[.16em] text-cyan-600">
+            Workspace Setup
+          </p>
+          <h2 className="mt-2 text-3xl font-bold tracking-[-.05em]">
+            {step === 1 && "Create your workspace"}
+            {step === 2 && "Professional Details"}
+            {step === 3 && "Join organization"}
+          </h2>
+          <p className="mt-3 text-sm text-slate-400">
+            {step === 1 && "Start building a clearer clinical data foundation."}
+            {step === 2 && "Help us customize your healthcare experience."}
+            {step === 3 && "Connect to your hospital network workspace."}
+          </p>
 
-      {/* Progress Bar */}
-      <div className="mt-6 flex items-center gap-2">
-        {[1, 2, 3].map((s) => (
-          <div key={s} className={`h-1.5 rounded-full flex-1 transition-colors ${step >= s ? 'bg-cyan-500' : 'bg-slate-200'}`} />
-        ))}
-      </div>
+          {/* Progress Bar */}
+          <div className="mt-6 flex items-center gap-2">
+            {[1, 2, 3].map((s) => (
+              <div key={s} className={`h-1.5 rounded-full flex-1 transition-colors ${step >= s ? 'bg-cyan-500' : 'bg-slate-200'}`} />
+            ))}
+          </div>
+        </>
+      )}
 
       {error && (
         <div className="mt-6 p-3 rounded-2xl bg-red-50 border border-red-100 text-xs font-medium text-red-600">
@@ -139,35 +147,24 @@ export const Register: React.FC = () => {
 
       {step === 2 && (
         <form onSubmit={nextStep} className="mt-8 space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() => setRole('DATA_ANALYST')}
-              className={`w-full flex items-center gap-4 p-4 rounded-2xl border text-left transition ${role === 'DATA_ANALYST' ? 'bg-cyan-50 border-cyan-400 shadow-sm shadow-cyan-100' : 'bg-white border-slate-200 hover:border-slate-300'}`}
-            >
-              <div className={`grid size-10 place-items-center rounded-lg ${role === 'DATA_ANALYST' ? 'bg-cyan-100 text-cyan-600' : 'bg-slate-100 text-slate-400'}`}>
-                <Database className="h-5 w-5" />
-              </div>
-              <div>
-                <p className={`text-sm font-bold ${role === 'DATA_ANALYST' ? 'text-cyan-900' : 'text-slate-700'}`}>Data Analyst</p>
-                <p className="text-xs text-slate-400">Run queries, ML pipelines, and AI reports</p>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setRole('VIEWER')}
-              className={`w-full flex items-center gap-4 p-4 rounded-2xl border text-left transition ${role === 'VIEWER' ? 'bg-blue-50 border-blue-400 shadow-sm shadow-blue-100' : 'bg-white border-slate-200 hover:border-slate-300'}`}
-            >
-              <div className={`grid size-10 place-items-center rounded-lg ${role === 'VIEWER' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400'}`}>
-                <CheckCircle2 className="h-5 w-5" />
-              </div>
-              <div>
-                <p className={`text-sm font-bold ${role === 'VIEWER' ? 'text-blue-900' : 'text-slate-700'}`}>Clinical Viewer</p>
-                <p className="text-xs text-slate-400">View dashboards and clinical reports</p>
-              </div>
-            </button>
+          <div className="grid grid-cols-2 gap-4">
+            <label className="block">
+              <span className="mb-2 block text-xs font-semibold text-slate-600">Job Title</span>
+              <input type="text" required value={jobTitle} onChange={e => setJobTitle(e.target.value)} className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" placeholder="e.g. Chief Medical Officer" />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-xs font-semibold text-slate-600">Department</span>
+              <input type="text" required value={department} onChange={e => setDepartment(e.target.value)} className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" placeholder="e.g. Cardiology" />
+            </label>
           </div>
+          <label className="block">
+            <span className="mb-2 block text-xs font-semibold text-slate-600">NPI Number (Optional)</span>
+            <input type="text" value={npiNumber} onChange={e => setNpiNumber(e.target.value)} className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" placeholder="10-digit National Provider Identifier" />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-xs font-semibold text-slate-600">Work Phone</span>
+            <input type="tel" required value={phone} onChange={e => setPhone(e.target.value)} className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" placeholder="+1 (555) 000-0000" />
+          </label>
 
           <div className="flex gap-3 pt-4">
             <button type="button" onClick={prevStep} className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 hover:bg-slate-50 transition w-1/3 shadow-sm">
@@ -229,6 +226,24 @@ export const Register: React.FC = () => {
             </button>
           </div>
         </form>
+      )}
+
+      {step === 4 && (
+        <div className="text-center py-8 animate-in fade-in zoom-in-95 duration-300">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 ring-8 ring-emerald-50">
+            <CheckCircle2 className="size-8 text-emerald-600" />
+          </div>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900 mb-2">Registration Submitted</h2>
+          <p className="text-sm text-slate-500 mb-8 max-w-sm mx-auto">
+            Your account has been created and is currently pending verification. An Organization Administrator must approve your request before you can log in.
+          </p>
+          <Link
+            to="/login"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-slate-900 px-8 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800"
+          >
+            Return to Sign In
+          </Link>
+        </div>
       )}
 
       {step === 1 && (

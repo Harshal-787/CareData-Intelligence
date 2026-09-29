@@ -20,17 +20,21 @@ func NewRepository(db *database.DB) *Repository {
 	return &Repository{db: db}
 }
 
+func (r *Repository) PingDB() error {
+	return r.db.Ping()
+}
+
 // User Repositories
 func (r *Repository) GetUserByEmail(email string) (*domain.User, error) {
-	query := "SELECT id, organization_id, email, password_hash, full_name, role, is_active, created_at, updated_at FROM users WHERE email = $1"
+	query := "SELECT id, organization_id, email, password_hash, full_name, job_title, department, npi_number, phone, role, is_active, created_at, updated_at FROM users WHERE email = $1"
 	if r.db.Driver == "sqlite3" {
-		query = "SELECT id, organization_id, email, password_hash, full_name, role, is_active, created_at, updated_at FROM users WHERE email = ?"
+		query = "SELECT id, organization_id, email, password_hash, full_name, job_title, department, npi_number, phone, role, is_active, created_at, updated_at FROM users WHERE email = ?"
 	}
 
 	row := r.db.QueryRow(query, email)
 	var user domain.User
 	var roleStr string
-	err := row.Scan(&user.ID, &user.OrganizationID, &user.Email, &user.PasswordHash, &user.FullName, &roleStr, &user.IsActive, &user.CreatedAt, &user.UpdatedAt)
+	err := row.Scan(&user.ID, &user.OrganizationID, &user.Email, &user.PasswordHash, &user.FullName, &user.JobTitle, &user.Department, &user.NPINumber, &user.Phone, &roleStr, &user.IsActive, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -42,15 +46,15 @@ func (r *Repository) GetUserByEmail(email string) (*domain.User, error) {
 }
 
 func (r *Repository) GetUserByID(id string) (*domain.User, error) {
-	query := "SELECT id, organization_id, email, password_hash, full_name, role, is_active, created_at, updated_at FROM users WHERE id = $1"
+	query := "SELECT id, organization_id, email, password_hash, full_name, job_title, department, npi_number, phone, role, is_active, created_at, updated_at FROM users WHERE id = $1"
 	if r.db.Driver == "sqlite3" {
-		query = "SELECT id, organization_id, email, password_hash, full_name, role, is_active, created_at, updated_at FROM users WHERE id = ?"
+		query = "SELECT id, organization_id, email, password_hash, full_name, job_title, department, npi_number, phone, role, is_active, created_at, updated_at FROM users WHERE id = ?"
 	}
 
 	row := r.db.QueryRow(query, id)
 	var user domain.User
 	var roleStr string
-	err := row.Scan(&user.ID, &user.OrganizationID, &user.Email, &user.PasswordHash, &user.FullName, &roleStr, &user.IsActive, &user.CreatedAt, &user.UpdatedAt)
+	err := row.Scan(&user.ID, &user.OrganizationID, &user.Email, &user.PasswordHash, &user.FullName, &user.JobTitle, &user.Department, &user.NPINumber, &user.Phone, &roleStr, &user.IsActive, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -62,13 +66,13 @@ func (r *Repository) GetUserByID(id string) (*domain.User, error) {
 }
 
 func (r *Repository) CreateUser(u *domain.User) error {
-	query := `INSERT INTO users (id, organization_id, email, password_hash, full_name, role, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+	query := `INSERT INTO users (id, organization_id, email, password_hash, full_name, job_title, department, npi_number, phone, role, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
 	if r.db.Driver == "sqlite3" {
-		query = `INSERT INTO users (id, organization_id, email, password_hash, full_name, role, is_active, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		query = `INSERT INTO users (id, organization_id, email, password_hash, full_name, job_title, department, npi_number, phone, role, is_active, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	}
-	_, err := r.db.Exec(query, u.ID, u.OrganizationID, u.Email, u.PasswordHash, u.FullName, string(u.Role), u.IsActive, u.CreatedAt, u.UpdatedAt)
+	_, err := r.db.Exec(query, u.ID, u.OrganizationID, u.Email, u.PasswordHash, u.FullName, u.JobTitle, u.Department, u.NPINumber, u.Phone, string(u.Role), u.IsActive, u.CreatedAt, u.UpdatedAt)
 	return err
 }
 
@@ -77,12 +81,12 @@ func (r *Repository) ListUsersByOrg(orgID string) ([]domain.UserResponse, error)
 	var err error
 
 	if orgID == "" {
-		query := "SELECT id, email, full_name, role, organization_id FROM users ORDER BY created_at DESC"
+		query := "SELECT id, email, full_name, job_title, department, npi_number, phone, role, is_active, organization_id FROM users ORDER BY created_at DESC"
 		rows, err = r.db.Query(query)
 	} else {
-		query := "SELECT id, email, full_name, role, organization_id FROM users WHERE organization_id = $1 ORDER BY created_at DESC"
+		query := "SELECT id, email, full_name, job_title, department, npi_number, phone, role, is_active, organization_id FROM users WHERE organization_id = $1 ORDER BY created_at DESC"
 		if r.db.Driver == "sqlite3" {
-			query = "SELECT id, email, full_name, role, organization_id FROM users WHERE organization_id = ? ORDER BY created_at DESC"
+			query = "SELECT id, email, full_name, job_title, department, npi_number, phone, role, is_active, organization_id FROM users WHERE organization_id = ? ORDER BY created_at DESC"
 		}
 		rows, err = r.db.Query(query, orgID)
 	}
@@ -95,25 +99,34 @@ func (r *Repository) ListUsersByOrg(orgID string) ([]domain.UserResponse, error)
 	for rows.Next() {
 		var u domain.UserResponse
 		var roleStr string
-		if err := rows.Scan(&u.ID, &u.Email, &u.FullName, &roleStr, &u.OrganizationID); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.FullName, &u.JobTitle, &u.Department, &u.NPINumber, &u.Phone, &roleStr, &u.IsActive, &u.OrganizationID); err != nil {
 			return nil, err
 		}
 		u.Role = domain.Role(roleStr)
 		users = append(users, u)
 	}
+
 	return users, nil
 }
 
+func (r *Repository) UpdateUserStatus(id string, isActive bool) error {
+	query := "UPDATE users SET is_active = $1, updated_at = $2 WHERE id = $3"
+	if r.db.Driver == "sqlite3" {
+		query = "UPDATE users SET is_active = ?, updated_at = ? WHERE id = ?"
+	}
+	_, err := r.db.Exec(query, isActive, time.Now(), id)
+	return err
+}
 // Organization Repositories
 func (r *Repository) GetOrgByID(id string) (*domain.Organization, error) {
-	query := "SELECT id, name, slug, created_at, updated_at FROM organizations WHERE id = $1"
+	query := "SELECT id, name, slug, is_active, created_at, updated_at FROM organizations WHERE id = $1"
 	if r.db.Driver == "sqlite3" {
-		query = "SELECT id, name, slug, created_at, updated_at FROM organizations WHERE id = ?"
+		query = "SELECT id, name, slug, is_active, created_at, updated_at FROM organizations WHERE id = ?"
 	}
 
 	row := r.db.QueryRow(query, id)
 	var org domain.Organization
-	if err := row.Scan(&org.ID, &org.Name, &org.Slug, &org.CreatedAt, &org.UpdatedAt); err != nil {
+	if err := row.Scan(&org.ID, &org.Name, &org.Slug, &org.IsActive, &org.CreatedAt, &org.UpdatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -123,16 +136,43 @@ func (r *Repository) GetOrgByID(id string) (*domain.Organization, error) {
 }
 
 func (r *Repository) CreateOrg(org *domain.Organization) error {
-	query := `INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)`
+	query := `INSERT INTO organizations (id, name, slug, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)`
 	if r.db.Driver == "sqlite3" {
-		query = `INSERT INTO organizations (id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`
+		query = `INSERT INTO organizations (id, name, slug, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`
 	}
-	_, err := r.db.Exec(query, org.ID, org.Name, org.Slug, org.CreatedAt, org.UpdatedAt)
+	_, err := r.db.Exec(query, org.ID, org.Name, org.Slug, org.IsActive, org.CreatedAt, org.UpdatedAt)
+	return err
+}
+
+func (r *Repository) UpdateOrgStatus(id string, isActive bool) error {
+	query := "UPDATE organizations SET is_active = $1, updated_at = $2 WHERE id = $3"
+	if r.db.Driver == "sqlite3" {
+		query = "UPDATE organizations SET is_active = ?, updated_at = ? WHERE id = ?"
+	}
+	_, err := r.db.Exec(query, isActive, time.Now(), id)
+	return err
+}
+
+func (r *Repository) UpdateUserProfile(userID string, fullName string, email string) error {
+	query := `UPDATE users SET full_name = $1, email = $2, updated_at = $3 WHERE id = $4`
+	if r.db.Driver == "sqlite3" {
+		query = `UPDATE users SET full_name = ?, email = ?, updated_at = ? WHERE id = ?`
+	}
+	_, err := r.db.Exec(query, fullName, email, time.Now(), userID)
+	return err
+}
+
+func (r *Repository) UpdateUserPassword(userID string, passwordHash string) error {
+	query := `UPDATE users SET password_hash = $1, updated_at = $2 WHERE id = $3`
+	if r.db.Driver == "sqlite3" {
+		query = `UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?`
+	}
+	_, err := r.db.Exec(query, passwordHash, time.Now(), userID)
 	return err
 }
 
 func (r *Repository) ListOrgs() ([]domain.Organization, error) {
-	rows, err := r.db.Query("SELECT id, name, slug, created_at, updated_at FROM organizations ORDER BY name ASC")
+	rows, err := r.db.Query("SELECT id, name, slug, is_active, created_at, updated_at FROM organizations ORDER BY name ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +181,7 @@ func (r *Repository) ListOrgs() ([]domain.Organization, error) {
 	var orgs []domain.Organization
 	for rows.Next() {
 		var o domain.Organization
-		if err := rows.Scan(&o.ID, &o.Name, &o.Slug, &o.CreatedAt, &o.UpdatedAt); err != nil {
+		if err := rows.Scan(&o.ID, &o.Name, &o.Slug, &o.IsActive, &o.CreatedAt, &o.UpdatedAt); err != nil {
 			return nil, err
 		}
 		orgs = append(orgs, o)
@@ -192,6 +232,34 @@ func (r *Repository) ListAuditLogs(orgID string, limit int) ([]domain.AuditLog, 
 		logs = append(logs, l)
 	}
 	return logs, nil
+}
+
+// -------------------------------------------------------------
+// Platform Settings
+// -------------------------------------------------------------
+
+func (r *Repository) GetPlatformSettings() (*domain.PlatformSettings, error) {
+	query := `SELECT id, platform_name, support_email, maintenance_mode, enforce_2fa_globally, session_timeout_mins, gemini_api_key, default_llm_model, llm_temperature, updated_at FROM platform_settings WHERE id = 'global-config-1'`
+	
+	row := r.db.QueryRow(query)
+	var s domain.PlatformSettings
+	if err := row.Scan(&s.ID, &s.PlatformName, &s.SupportEmail, &s.MaintenanceMode, &s.Enforce2FAGlobally, &s.SessionTimeoutMins, &s.GeminiAPIKey, &s.DefaultLLMModel, &s.LLMTemperature, &s.UpdatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &s, nil
+}
+
+func (r *Repository) UpdatePlatformSettings(s *domain.PlatformSettings) error {
+	query := `UPDATE platform_settings SET platform_name = $1, support_email = $2, maintenance_mode = $3, enforce_2fa_globally = $4, session_timeout_mins = $5, gemini_api_key = $6, default_llm_model = $7, llm_temperature = $8, updated_at = $9 WHERE id = 'global-config-1'`
+	if r.db.Driver == "sqlite3" {
+		query = `UPDATE platform_settings SET platform_name = ?, support_email = ?, maintenance_mode = ?, enforce_2fa_globally = ?, session_timeout_mins = ?, gemini_api_key = ?, default_llm_model = ?, llm_temperature = ?, updated_at = ? WHERE id = 'global-config-1'`
+	}
+
+	_, err := r.db.Exec(query, s.PlatformName, s.SupportEmail, s.MaintenanceMode, s.Enforce2FAGlobally, s.SessionTimeoutMins, s.GeminiAPIKey, s.DefaultLLMModel, s.LLMTemperature, time.Now())
+	return err
 }
 
 // -------------------------------------------------------------

@@ -1,3 +1,4 @@
+//go:build ignore
 package main
 
 import (
@@ -32,13 +33,17 @@ func main() {
 		log.Fatal("no records read")
 	}
 
-	fmt.Printf("Raw res[0] type: %T\n", res[0])
-	fmt.Printf("Raw res[0]: %+v\n", res[0])
+	fmt.Printf("Raw res[0] type: %T
+", res[0])
+	fmt.Printf("Raw res[0]: %+v
+", res[0])
 
 	jsonBs, err := json.Marshal(res[0])
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("JSON length: %d\n", len(jsonBs))
-	fmt.Printf("JSON content: %s\n", string(jsonBs))
+	fmt.Printf("JSON length: %d
+", len(jsonBs))
+	fmt.Printf("JSON content: %s
+", string(jsonBs))
 }

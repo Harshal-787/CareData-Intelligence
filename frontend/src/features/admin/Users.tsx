@@ -22,7 +22,8 @@ export const UsersAdmin: React.FC = () => {
     try {
       setLoading(true);
       const res = await api.get('/users');
-      setUsers(res.data);
+      const filteredUsers = res.data.filter((u: User) => u.role !== 'SUPER_ADMIN');
+      setUsers(filteredUsers);
     } catch (err) {
       console.error(err);
     } finally {
@@ -50,6 +51,15 @@ export const UsersAdmin: React.FC = () => {
       fetchUsers();
     } catch (err: any) {
       setFormError(err.response?.data?.error || 'Failed to create user');
+    }
+  };
+
+  const handleApproveUser = async (id: string) => {
+    try {
+      await api.put(`/users/${id}/approve`);
+      fetchUsers();
+    } catch (err) {
+      console.error('Failed to approve user', err);
     }
   };
 
@@ -134,17 +144,33 @@ export const UsersAdmin: React.FC = () => {
                       {u.organizationId}
                     </td>
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1 text-emerald-600 font-medium">
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Active
-                      </span>
+                      {u.isActive ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-600 font-medium">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-amber-600 font-medium bg-amber-50 px-2 rounded-full py-0.5 text-[11px]">
+                          Pending Approval
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-right">
                       {currentUser?.id === u.id ? (
                         <span className="text-[11px] text-slate-400 italic">Current Session</span>
                       ) : (
-                        <button className="text-cyan-600 hover:text-cyan-700 font-medium">
-                          Edit
-                        </button>
+                        <div className="flex items-center justify-end gap-3">
+                          {!u.isActive && (
+                            <button
+                              onClick={() => handleApproveUser(u.id)}
+                              className="text-emerald-600 hover:text-emerald-700 font-medium bg-emerald-50 px-2 py-1 rounded transition text-[11px]"
+                            >
+                              Approve
+                            </button>
+                          )}
+                          <button className="text-cyan-600 hover:text-cyan-700 font-medium">
+                            Edit
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -223,9 +249,6 @@ export const UsersAdmin: React.FC = () => {
                   <option value="ORG_ADMIN">Organization Administrator (Full Org Access)</option>
                   <option value="DATA_ANALYST">Data Analyst (Analytics & AI Access)</option>
                   <option value="VIEWER">Viewer (Read-only Dashboards)</option>
-                  {currentUser?.role === 'SUPER_ADMIN' && (
-                    <option value="SUPER_ADMIN">Super Administrator (Global)</option>
-                  )}
                 </select>
               </div>
 

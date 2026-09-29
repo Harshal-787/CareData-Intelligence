@@ -3,7 +3,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 # Load environment variables from the root .env file
-load_dotenv('../.env')
+load_dotenv('../backend/.env')
 
 import os
 from fastapi import FastAPI, HTTPException
@@ -38,12 +38,14 @@ class NL2SQLRequest(BaseModel):
     question: str
     bucket: str = "raw-data"
     object_name: str = ""
+    model: str = "gemini-3.6-flash"
 
 class InsightRequest(BaseModel):
     title: str = ""
     dataset_name: str = "Clinical Dataset"
     bucket: str = "raw-data"
     object_name: str = ""
+    model: str = "gemini-3.6-flash"
 
 @app.post("/api/v1/query")
 def execute_query(req: QueryRequest):
@@ -106,7 +108,7 @@ def execute_nl2sql(req: NL2SQLRequest):
         
         # 3. Generate SQL using Gemini
         agent = NL2SQLAgent()
-        sql_query = agent.generate_sql(req.question, schema_context)
+        sql_query = agent.generate_sql(req.question, schema_context, req.model)
         
         # 4. Execute the generated SQL
         df = loader.get_query_result(sql_query)
@@ -155,7 +157,7 @@ def generate_narrative(req: InsightRequest):
     try:
         stats = _get_dataset_statistics(DataLoader(), req.bucket, req.object_name)
         agent = ClinicalInsightsAgent()
-        return agent.generate_narrative(stats)
+        return agent.generate_narrative(stats, req.model)
     except Exception as e:
         logger.error(f"Narrative generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -167,12 +169,12 @@ def generate_report(req: InsightRequest):
     try:
         stats = _get_dataset_statistics(DataLoader(), req.bucket, req.object_name)
         agent = ClinicalInsightsAgent()
-        return agent.generate_report(req.title, req.dataset_name, stats)
+        return agent.generate_report(req.title, req.dataset_name, stats, req.model)
     except Exception as e:
         logger.error(f"Report generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))
+    port = 8000
     uvicorn.run(app, host="0.0.0.0", port=port)

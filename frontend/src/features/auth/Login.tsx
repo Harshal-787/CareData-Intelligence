@@ -18,8 +18,12 @@ export const Login: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      await login(email, password);
-      navigate('/dashboard');
+      const loggedUser = await login(email, password);
+      if (loggedUser.role === 'SUPER_ADMIN') {
+        navigate('/superadmin/organizations');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err: any) {
       if (!err.response || err.response.status === 504 || err.response.status === 502) {
         setError('Network Error: Cannot connect to the server (it may still be starting up).');

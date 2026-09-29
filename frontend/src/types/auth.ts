@@ -13,6 +13,7 @@ export interface User {
   email: string;
   fullName: string;
   role: Role;
+  isActive: boolean;
   organizationId: string;
   organization?: Organization;
 }

@@ -34,12 +34,14 @@ func (s *AuthService) Register(req *domain.RegisterRequest) (*domain.AuthRespons
 
 	orgID := "org-" + uuid.New().String()[:8]
 	slug := strings.ToLower(strings.ReplaceAll(req.OrganizationName, " ", "-"))
+	slug = fmt.Sprintf("%s-%s", slug, orgID[4:])
 	now := time.Now()
 
 	org := &domain.Organization{
 		ID:        orgID,
 		Name:      req.OrganizationName,
 		Slug:      slug,
+		IsActive:  false, // Requires SuperAdmin approval
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -64,6 +66,10 @@ func (s *AuthService) Register(req *domain.RegisterRequest) (*domain.AuthRespons
 		Email:          req.Email,
 		PasswordHash:   string(hashedPassword),
 		FullName:       req.FullName,
+		JobTitle:       req.JobTitle,
+		Department:     req.Department,
+		NPINumber:      req.NPINumber,
+		Phone:          req.Phone,
 		Role:           role,
 		IsActive:       true,
 		CreatedAt:      now,
@@ -121,8 +127,12 @@ func (s *AuthService) RegisterUser(req *domain.RegisterUserRequest) (*domain.Aut
 		Email:          req.Email,
 		PasswordHash:   string(hashedPassword),
 		FullName:       req.FullName,
+		JobTitle:       req.JobTitle,
+		Department:     req.Department,
+		NPINumber:      req.NPINumber,
+		Phone:          req.Phone,
 		Role:           role,
-		IsActive:       true, // In a strict flow, this could be false pending approval
+		IsActive:       false, // Account pending approval
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
@@ -156,14 +166,21 @@ func (s *AuthService) Login(req *domain.LoginRequest) (*domain.AuthResponse, err
 	}
 
 	if !user.IsActive {
-		return nil, errors.New("account has been deactivated")
+		return nil, errors.New("account pending approval or deactivated")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
 		return nil, errors.New("invalid email or password")
 	}
 
-	org, _ := s.repo.GetOrgByID(user.OrganizationID)
+	org, err := s.repo.GetOrgByID(user.OrganizationID)
+	if err != nil || org == nil {
+		return nil, errors.New("organization not found")
+	}
+
+	if !org.IsActive {
+		return nil, errors.New("organization account is suspended or pending approval")
+	}
 
 	_ = s.repo.CreateAuditLog(&domain.AuditLog{
 		ID:             "audit-" + uuid.New().String()[:8],
@@ -299,9 +316,52 @@ func (s *AuthService) generateAuthResponse(user *domain.User, org *domain.Organi
 			ID:             user.ID,
 			Email:          user.Email,
 			FullName:       user.FullName,
+			JobTitle:       user.JobTitle,
+			Department:     user.Department,
+			NPINumber:      user.NPINumber,
+			Phone:          user.Phone,
 			Role:           user.Role,
+			IsActive:       user.IsActive,
 			OrganizationID: user.OrganizationID,
 			Organization:   org,
 		},
 	}, nil
+}
+
+func (s *AuthService) ApproveUser(userID string, approver *domain.AuthClaims) error {
+	user, err := s.repo.GetUserByID(userID)
+	if err != nil {
+		return fmt.Errorf("error querying user: %w", err)
+	}
+	if user == nil {
+		return errors.New("user not found")
+	}
+
+	if approver.Role != domain.RoleSuperAdmin {
+		if user.OrganizationID != approver.OrganizationID {
+			return errors.New("forbidden: cannot approve user from another organization")
+		}
+	}
+
+	if user.IsActive {
+		return errors.New("user is already active")
+	}
+
+	if err := s.repo.UpdateUserStatus(userID, true); err != nil {
+		return fmt.Errorf("failed to update user status: %w", err)
+	}
+
+	_ = s.repo.CreateAuditLog(&domain.AuditLog{
+		ID:             "audit-" + uuid.New().String()[:8],
+		OrganizationID: user.OrganizationID,
+		UserID:         approver.UserID,
+		UserEmail:      approver.Email,
+		Action:         "APPROVE_USER",
+		Resource:       "USER",
+		Details:        fmt.Sprintf("Admin %s approved user %s", approver.Email, user.Email),
+		IPAddress:      "127.0.0.1",
+		CreatedAt:      time.Now(),
+	})
+
+	return nil
 }

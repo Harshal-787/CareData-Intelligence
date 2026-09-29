@@ -1,3 +1,4 @@
+//go:build ignore
 package main
 
 import (
@@ -26,14 +27,20 @@ func main() {
 		log.Fatalf("RunQualityAudit failed: %v", err)
 	}
 	
-	fmt.Printf("Successfully generated Quality Audit!\n")
-	fmt.Printf("Report ID: %s\n", report.ID)
-	fmt.Printf("Overall Score: %.2f\n", report.OverallScore)
+	fmt.Printf("Successfully generated Quality Audit!
+")
+	fmt.Printf("Report ID: %s
+", report.ID)
+	fmt.Printf("Overall Score: %.2f
+", report.OverallScore)
 	
 	if len(report.ColumnProfiles) > 0 {
-		fmt.Printf("Generated profiles for %d columns!\n", len(report.ColumnProfiles))
-		fmt.Printf("Sample Col: %s (Type: %s)\n", report.ColumnProfiles[0].ColumnName, report.ColumnProfiles[0].DataType)
+		fmt.Printf("Generated profiles for %d columns!
+", len(report.ColumnProfiles))
+		fmt.Printf("Sample Col: %s (Type: %s)
+", report.ColumnProfiles[0].ColumnName, report.ColumnProfiles[0].DataType)
 	} else {
-		fmt.Printf("NO COLUMN PROFILES GENERATED!\n")
+		fmt.Printf("NO COLUMN PROFILES GENERATED!
+")
 	}
 }

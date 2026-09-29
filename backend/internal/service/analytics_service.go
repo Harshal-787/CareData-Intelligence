@@ -58,7 +58,7 @@ func (s *AnalyticsService) GetClinicalMetrics(orgID string, filter domain.Analyt
 // ExecuteQuery runs an in-memory / DuckDB OLAP SQL query against loaded dataset records via Python Data Engine, OR routes to Snowflake if configured.
 func (s *AnalyticsService) ExecuteQuery(orgID string, req domain.SQLQueryRequest) (*domain.SQLQueryResponse, error) {
 	// 1. Check if the user has a provisioned Snowflake warehouse
-	if s.sf != nil && s.sf.ExecuteTenantQuery != nil {
+	if s.sf != nil {
 		// Attempt Snowflake query first. If credentials are set, this succeeds.
 		sfRes, err := s.sf.ExecuteTenantQuery(orgID, req.Query)
 		if err == nil {
