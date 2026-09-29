@@ -20,7 +20,7 @@ class NL2SQLAgent:
         else:
             self.client = genai.Client(api_key=api_key)
         
-    def generate_sql(self, question: str, schema_context: str) -> str:
+    def generate_sql(self, question: str, schema_context: str, model: str = "gemini-3.6-flash") -> str:
         """
         Takes a user's natural language question and the exact database schema,
         and prompts Gemini to return ONLY the raw SQL query.
@@ -48,7 +48,7 @@ USER QUESTION:
 
         try:
             response = self.client.models.generate_content(
-                model='gemini-3.6-flash',
+                model=model,
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
@@ -86,7 +86,7 @@ class ClinicalInsightsAgent:
         else:
             self.client = genai.Client(api_key=api_key)
             
-    def generate_narrative(self, stats: dict) -> dict:
+    def generate_narrative(self, stats: dict, model: str = "gemini-3.6-flash") -> dict:
         if not self.client:
             raise RuntimeError("Insights AI Engine failure: GEMINI_API_KEY not configured.")
             
@@ -103,7 +103,7 @@ Return a JSON object matching this structure EXACTLY:
         prompt = f"DATASET STATISTICS:\n{json.dumps(stats, indent=2)}"
         
         response = self.client.models.generate_content(
-            model='gemini-3.6-flash',
+            model=model,
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
@@ -113,7 +113,7 @@ Return a JSON object matching this structure EXACTLY:
         )
         return json.loads(response.text.strip())
 
-    def generate_report(self, title: str, dataset_name: str, stats: dict) -> dict:
+    def generate_report(self, title: str, dataset_name: str, stats: dict, model: str = "gemini-3.6-flash") -> dict:
         if not self.client:
             raise RuntimeError("Insights AI Engine failure: GEMINI_API_KEY not configured.")
             
@@ -135,7 +135,7 @@ Return a JSON object matching this structure EXACTLY:
         for attempt in range(max_retries):
             try:
                 response = self.client.models.generate_content(
-                    model='gemini-3.6-flash',
+                    model=model,
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         system_instruction=system_instruction,

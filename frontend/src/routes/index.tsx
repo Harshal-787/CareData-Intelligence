@@ -19,6 +19,12 @@ import { AIInsightsPage } from "../features/ai/AIInsightsPage";
 import { PipelinePage } from "../features/pipelines/PipelinePage";
 import { ReportsPage } from "../features/reports/ReportsPage";
 import { StreamingPage } from "../features/streaming/StreamingPage";
+import { SettingsPage } from "../features/settings/SettingsPage";
+import { SuperAdminDashboard } from "../features/superadmin/SuperAdminDashboard";
+import { OrganizationsDashboard } from "../features/superadmin/OrganizationsDashboard";
+import { SuperAdminLayout } from "../layouts/SuperAdminLayout";
+import { SystemHealth, BillingSubscriptions, GlobalAuditLogs, PlatformSettings } from "../features/superadmin/Placeholders";
+import { SuperAdminProfile } from "../features/superadmin/SuperAdminProfile";
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -34,44 +40,40 @@ export const AppRoutes: React.FC = () => {
 
       {/* Authenticated Dashboard Routes */}
       <Route element={<ProtectedRoute />}>
-        <Route element={<DashboardLayout />}>
-          <Route path="/dashboard" element={<DashboardHome />} />
+        {/* Super Admin Dashboard (Completely Separate) */}
+        <Route path="/superadmin" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} />}>
+          <Route element={<SuperAdminLayout />}>
+            <Route path="dashboard" element={<SuperAdminDashboard />} />
+            <Route path="organizations" element={<OrganizationsDashboard />} />
+            <Route path="health" element={<SystemHealth />} />
+            <Route path="billing" element={<BillingSubscriptions />} />
+            <Route path="audit-logs" element={<GlobalAuditLogs />} />
+            <Route path="settings" element={<PlatformSettings />} />
+            <Route path="profile" element={<SuperAdminProfile />} />
+            <Route path="*" element={<Navigate to="/superadmin/dashboard" replace />} />
+          </Route>
+        </Route>
 
-          {/* Phase 9: Real-Time Stream Ingestion & HL7 Monitor */}
+        {/* Core Healthcare Dashboard (Organization Users Only) */}
+        <Route element={<ProtectedRoute allowedRoles={['ORG_ADMIN', 'DATA_ANALYST', 'VIEWER']} />}>
+          <Route element={<DashboardLayout />}>
+            <Route path="/dashboard" element={<DashboardHome />} />
           <Route path="/streaming" element={<StreamingPage />} />
-
-          {/* Phase 2: Datasets & Raw Lakehouse Ingestion */}
           <Route path="/datasets" element={<DatasetsPage />} />
-
-          {/* Phase 3: Data Quality, Profiling & Clinical Rules */}
           <Route path="/quality" element={<QualityPage />} />
-
-          {/* Phase 4: Deduplication & Patient Resolution */}
           <Route path="/deduplication" element={<DeduplicationPage />} />
-
-          {/* Phase 5: Healthcare Analytics & OLAP Engine */}
           <Route path="/analytics" element={<AnalyticsPage />} />
-
-          {/* Phase 6: ML Predictions */}
           <Route path="/ml-predictions" element={<MLPredictionsPage />} />
-
-          {/* Phase 7: AI Insights */}
           <Route path="/ai-insights" element={<AIInsightsPage />} />
-
-          {/* Phase 8: Pipeline Orchestration */}
           <Route path="/pipelines" element={<PipelinePage />} />
-
-          {/* Phase 8: Clinical Reports */}
           <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
 
-          {/* Super Admin & Org Admin Protected Routes */}
-          <Route
-            element={
-              <ProtectedRoute allowedRoles={["SUPER_ADMIN", "ORG_ADMIN"]} />
-            }
-          >
+          {/* Admin Restricted Routes */}
+          <Route element={<ProtectedRoute allowedRoles={["ORG_ADMIN"]} />}>
             <Route path="/admin/users" element={<UsersAdmin />} />
             <Route path="/admin/audit-logs" element={<AuditLogsAdmin />} />
+          </Route>
           </Route>
         </Route>
       </Route>
@@ -81,4 +83,3 @@ export const AppRoutes: React.FC = () => {
     </Routes>
   );
 };
-

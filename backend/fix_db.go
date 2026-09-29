@@ -1,3 +1,4 @@
+//go:build ignore
 package main
 
 import (
@@ -65,5 +66,6 @@ func main() {
 		log.Fatalf("Update failed: %v", err)
 	}
 
-	fmt.Printf("Successfully updated ds-demo-101! Columns: %d, Records: %d\n", parseRes.ColumnsCount, parseRes.TotalRecords)
+	fmt.Printf("Successfully updated ds-demo-101! Columns: %d, Records: %d
+", parseRes.ColumnsCount, parseRes.TotalRecords)
 }

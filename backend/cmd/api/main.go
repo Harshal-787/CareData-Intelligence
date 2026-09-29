@@ -229,9 +229,15 @@ func main() {
 			// User Management (Admins & Super Admins)
 			r.Get("/users", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin)(http.HandlerFunc(h.ListUsers)).ServeHTTP)
 			r.Post("/users", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin)(http.HandlerFunc(h.CreateUser)).ServeHTTP)
+			r.Put("/users/me/profile", h.UpdateMyProfile)
+			r.Put("/users/me/password", h.UpdateMyPassword)
 
-			// Organizations (Super Admin Only)
+			// Organizations & System (Super Admin Only)
 			r.Get("/organizations", middleware.RequireRoles(domain.RoleSuperAdmin)(http.HandlerFunc(h.ListOrganizations)).ServeHTTP)
+			r.Put("/organizations/{id}/status", middleware.RequireRoles(domain.RoleSuperAdmin)(http.HandlerFunc(h.UpdateOrganizationStatus)).ServeHTTP)
+			r.Get("/system/health", middleware.RequireRoles(domain.RoleSuperAdmin)(http.HandlerFunc(h.SystemHealth)).ServeHTTP)
+			r.Get("/system/settings", middleware.RequireRoles(domain.RoleSuperAdmin)(http.HandlerFunc(h.GetPlatformSettings)).ServeHTTP)
+			r.Put("/system/settings", middleware.RequireRoles(domain.RoleSuperAdmin)(http.HandlerFunc(h.UpdatePlatformSettings)).ServeHTTP)
 
 			// Audit Logs (Super Admin & Org Admin)
 			r.Get("/audit-logs", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin)(http.HandlerFunc(h.ListAuditLogs)).ServeHTTP)
