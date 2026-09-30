@@ -125,6 +125,7 @@ export interface SnowflakeConfig {
   schema: string;
   role: string;
   username: string;
+  password?: string;
   isConnected: boolean;
   autoSync: boolean;
   syncInterval: string;

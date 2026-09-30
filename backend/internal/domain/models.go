@@ -609,6 +609,7 @@ type SnowflakeConfig struct {
 	Schema         string    `json:"schema"`
 	Role           string    `json:"role"`
 	Username       string    `json:"username"`
+	Password       string    `json:"password"`
 	IsConnected    bool      `json:"isConnected"`
 	AutoSync       bool      `json:"autoSync"`
 	SyncInterval   string    `json:"syncInterval"` // "HOURLY", "DAILY", "MANUAL"

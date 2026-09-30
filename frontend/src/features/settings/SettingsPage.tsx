@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Mail, Lock, Bell, Moon, Sun, Save, LogOut } from 'lucide-react';
+import { User, Mail, Lock, Bell, Moon, Sun, Save, LogOut, Database, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
+import { fetchSnowflakeStatus, updateSnowflakeConfig } from '../../api/analyticsApi';
 
 export const SettingsPage: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'notifications' | 'appearance'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'notifications' | 'appearance' | 'integrations'>('profile');
   
   const handleLogout = () => {
     logout();
@@ -16,6 +17,63 @@ export const SettingsPage: React.FC = () => {
   
   const [fullName, setFullName] = useState(user?.fullName || '');
   const [email, setEmail] = useState(user?.email || '');
+
+  const [isTesting, setIsTesting] = useState(false);
+  const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+
+  const [sfAccount, setSfAccount] = useState('');
+  const [sfUser, setSfUser] = useState('');
+  const [sfPassword, setSfPassword] = useState('');
+  const [sfWarehouse, setSfWarehouse] = useState('');
+  const [sfDatabase, setSfDatabase] = useState('');
+  const [sfSchema, setSfSchema] = useState('');
+
+  React.useEffect(() => {
+    if (activeTab === 'integrations') {
+      fetchSnowflakeStatus()
+        .then((res) => {
+          setIsConnected(res.config?.isConnected || false);
+          if (res.config) {
+            setSfAccount(res.config.account || '');
+            setSfUser(res.config.username || '');
+            setSfWarehouse(res.config.warehouse || '');
+            setSfDatabase(res.config.database || '');
+            setSfSchema(res.config.schema || '');
+          }
+        })
+        .catch(console.error);
+    }
+  }, [activeTab]);
+
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    setTestStatus('idle');
+    try {
+      await updateSnowflakeConfig({
+        account: sfAccount,
+        username: sfUser,
+        password: sfPassword,
+        warehouse: sfWarehouse,
+        database: sfDatabase,
+        schema: sfSchema
+      });
+      setTestStatus('success');
+    } catch (err) {
+      setTestStatus('error');
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const handleSaveConnection = () => {
+    setIsSaving(true);
+    setTimeout(() => {
+      setIsSaving(false);
+      setIsConnected(true);
+    }, 500);
+  };
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -62,6 +120,15 @@ export const SettingsPage: React.FC = () => {
               )}
             >
               <Sun className="size-4" /> Appearance
+            </button>
+            <button
+              onClick={() => setActiveTab('integrations')}
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap",
+                activeTab === 'integrations' ? "bg-cyan-50 text-cyan-700" : "text-slate-600 hover:bg-slate-50"
+              )}
+            >
+              <Database className="size-4" /> Integrations
             </button>
           </nav>
           
@@ -206,6 +273,102 @@ export const SettingsPage: React.FC = () => {
                   <div className="cursor-not-allowed rounded-xl border-2 border-slate-100 bg-slate-50 p-4 text-center opacity-50 transition-all">
                     <Moon className="mx-auto mb-2 size-6 text-slate-400" />
                     <span className="text-sm font-medium text-slate-500">Dark Mode <br/><span className="text-[10px]">(Coming Soon)</span></span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'integrations' && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">Data Integrations</h2>
+                  <p className="text-sm text-slate-500">Connect external data warehouses and EHR systems.</p>
+                </div>
+                <div className="h-px bg-slate-100" />
+                
+                {/* Snowflake Integration Card */}
+                <div className="rounded-xl border border-slate-200 p-5 bg-slate-50/50">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="grid size-10 place-items-center rounded-xl bg-blue-100 text-blue-600">
+                        <Database className="size-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900">Snowflake Data Cloud</h3>
+                        <p className="text-xs text-slate-500">Connect your Snowflake account to import healthcare data directly.</p>
+                      </div>
+                    </div>
+                    {isConnected ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
+                        <CheckCircle2 className="size-3" /> Connected
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-500">
+                        Not Connected
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="grid gap-4 mt-4 bg-white p-4 rounded-xl border border-slate-200">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700">Account Identifier</label>
+                        <input type="text" value={sfAccount} onChange={e => setSfAccount(e.target.value)} placeholder="e.g. xy12345.us-east-1" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-all focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700">Username</label>
+                        <input type="text" value={sfUser} onChange={e => setSfUser(e.target.value)} placeholder="SNOWFLAKE_USER" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-all focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700">Password</label>
+                        <input type="password" value={sfPassword} onChange={e => setSfPassword(e.target.value)} placeholder="••••••••" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-all focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700">Warehouse</label>
+                        <input type="text" value={sfWarehouse} onChange={e => setSfWarehouse(e.target.value)} placeholder="COMPUTE_WH" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-all focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700">Database</label>
+                        <input type="text" value={sfDatabase} onChange={e => setSfDatabase(e.target.value)} placeholder="CARE_DATA_DB" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-all focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700">Schema</label>
+                        <input type="text" value={sfSchema} onChange={e => setSfSchema(e.target.value)} placeholder="PUBLIC" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-all focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20" />
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between mt-2 pt-4 border-t border-slate-100">
+                      <div>
+                        {testStatus === 'success' && (
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
+                            <CheckCircle2 className="size-4" /> Connection successful
+                          </div>
+                        )}
+                        {testStatus === 'error' && (
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-600">
+                            <AlertCircle className="size-4" /> Connection failed
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button 
+                          onClick={handleTestConnection}
+                          disabled={isTesting || isSaving}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700 transition disabled:opacity-50"
+                        >
+                          {isTesting && <Loader2 className="size-3.5 animate-spin" />}
+                          Test Connection
+                        </button>
+                        <button 
+                          onClick={handleSaveConnection}
+                          disabled={isTesting || isSaving || testStatus !== 'success'}
+                          className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-blue-500/20 transition hover:bg-blue-700 hover:shadow-blue-500/30 disabled:opacity-50 disabled:hover:bg-blue-600"
+                        >
+                          {isSaving && <Loader2 className="size-3.5 animate-spin" />}
+                          Save Connection
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

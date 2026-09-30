@@ -186,3 +186,26 @@ func (h *AnalyticsHandler) TriggerSnowflakeSync(w http.ResponseWriter, r *http.R
 
 	respondJSON(w, http.StatusOK, syncRecord)
 }
+
+// GetSnowflakeTables handles GET /api/v1/analytics/snowflake/tables
+// @Summary      Get Snowflake Tables
+// @Description  Returns Snowflake tables.
+// @Tags         Analytics
+// @Security     BearerAuth
+// @Success      200 {array} map[string]interface{}
+// @Router       /analytics/snowflake/tables [get]
+func (h *AnalyticsHandler) GetSnowflakeTables(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetUserFromContext(r.Context())
+	if claims == nil {
+		respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	tables, err := h.analyticsService.GetSnowflakeTables(claims.OrganizationID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, tables)
+}
