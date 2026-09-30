@@ -108,7 +108,7 @@ func (s *AnalyticsService) GetClinicalMetrics(orgID string, filter domain.Analyt
 // ExecuteQuery runs an in-memory / DuckDB OLAP SQL query against loaded dataset records via Python Data Engine, OR routes to Snowflake if configured.
 func (s *AnalyticsService) ExecuteQuery(orgID string, req domain.SQLQueryRequest) (*domain.SQLQueryResponse, error) {
 	// 1. Check if the user has a provisioned Snowflake warehouse
-	if s.sf != nil && s.sf.ExecuteTenantQuery != nil {
+	if s.sf != nil {
 		// Attempt Snowflake query first. If credentials are set, this succeeds.
 		sfRes, err := s.sf.ExecuteTenantQuery(orgID, req.Query)
 		if err == nil {
@@ -231,10 +231,10 @@ func (s *AnalyticsService) UpdateSnowflakeConfig(orgID string, cfg *domain.Snowf
 	// Provision the tenant warehouse upon config save if not already provisioned.
 	// This ensures each healthcare center gets their dedicated resources.
 	if s.sf != nil {
-		if err := s.sf.ProvisionTenant(orgID); err != nil {
+		if err := s.sf.UpdateConnection(cfg.Account, cfg.Username, cfg.Password, cfg.Role); err != nil {
+			log.Printf("⚠️ Snowflake connection failed for %s: %v", orgID, err)
+		} else if err := s.sf.ProvisionTenant(orgID); err != nil {
 			log.Printf("⚠️ Snowflake provisioning failed for %s: %v", orgID, err)
-			// Return error so user knows provisioning failed? 
-			// We'll just log it for now to avoid blocking the config save if credentials aren't set in env yet.
 		} else {
 			cfg.IsConnected = true
 			orgIDClean := strings.ReplaceAll(orgID, "-", "_")
@@ -394,4 +394,11 @@ func (s *AnalyticsService) loadRecordsFromDatasets(datasets []domain.Dataset, ma
 	}
 
 	return allRecords
+}
+
+func (s *AnalyticsService) GetSnowflakeTables(orgID string) ([]map[string]interface{}, error) {
+	if s.sf != nil {
+		return s.sf.GetTables(orgID)
+	}
+	return nil, fmt.Errorf("snowflake client not initialized or not connected")
 }

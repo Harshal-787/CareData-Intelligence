@@ -8,7 +8,6 @@ import {
   DollarSign,
   Clock,
   AlertCircle,
-  Database,
   Terminal,
   Play,
   Download,
@@ -16,8 +15,6 @@ import {
   RefreshCw,
   Filter,
   Zap,
-  Server,
-  CloudLightning,
   Copy,
   Check,
   ShieldCheck,
@@ -29,19 +26,15 @@ import {
 import {
   fetchAnalyticsOverview,
   executeOlapQuery,
-  fetchSnowflakeStatus,
-  triggerSnowflakeSync,
-  updateSnowflakeConfig,
 } from '../../api/analyticsApi';
 import {
   AnalyticsOverviewResponse,
   AnalyticsFilterParams,
   SQLQueryResponse,
-  SnowflakeStatusResponse,
 } from '../../types/analytics';
 
 export const AnalyticsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'sql_studio' | 'snowflake'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'sql_studio'>('overview');
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [analyticsData, setAnalyticsData] = useState<AnalyticsOverviewResponse | null>(null);
@@ -60,11 +53,6 @@ export const AnalyticsPage: React.FC = () => {
   const [sqlExecuting, setSqlExecuting] = useState<boolean>(false);
   const [copiedQuery, setCopiedQuery] = useState<boolean>(false);
 
-  // Snowflake State
-  const [snowflakeData, setSnowflakeData] = useState<SnowflakeStatusResponse | null>(null);
-  const [syncingSnowflake, setSyncingSnowflake] = useState<boolean>(false);
-  const [syncSuccessMessage, setSyncSuccessMessage] = useState<string | null>(null);
-  const [provisioning, setProvisioning] = useState<boolean>(false);
 
   // Load Overview Data
   const loadAnalytics = async () => {
@@ -87,19 +75,8 @@ export const AnalyticsPage: React.FC = () => {
     }
   };
 
-  // Load Snowflake Status
-  const loadSnowflake = async () => {
-    try {
-      const res = await fetchSnowflakeStatus();
-      setSnowflakeData(res);
-    } catch (err) {
-      console.error('Failed to load Snowflake status:', err);
-    }
-  };
-
   useEffect(() => {
     loadAnalytics();
-    loadSnowflake();
   }, [selectedDataset, selectedDateRange, selectedDept, selectedAdmissionType]);
 
   // Execute SQL Studio Query
@@ -130,47 +107,6 @@ export const AnalyticsPage: React.FC = () => {
     }
   };
 
-  // Trigger Snowflake Sync
-  const handleTriggerSync = async () => {
-    try {
-      setSyncingSnowflake(true);
-      setSyncSuccessMessage(null);
-      const syncRes = await triggerSnowflakeSync(selectedDataset || undefined);
-      setSyncSuccessMessage(`Successfully synchronized ${syncRes.recordsSynced.toLocaleString()} records to ${syncRes.targetTable} in ${syncRes.durationMs}ms`);
-      loadSnowflake();
-    } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to trigger Snowflake sync');
-    } finally {
-      setSyncingSnowflake(false);
-    }
-  };
-
-  // Provision Tenant Warehouse
-  const handleProvisionWarehouse = async () => {
-    try {
-      setProvisioning(true);
-      await updateSnowflakeConfig({
-        id: '',
-        organizationId: '',
-        account: '',
-        warehouse: '',
-        database: '',
-        schema: '',
-        role: '',
-        username: '',
-        isConnected: false,
-        autoSync: true,
-        syncInterval: 'DAILY (Midnight UTC)',
-        updatedAt: new Date().toISOString(),
-      });
-      alert('Provisioning initiated successfully! Refreshing status...');
-      await loadSnowflake();
-    } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to provision warehouse');
-    } finally {
-      setProvisioning(false);
-    }
-  };
 
   // Export Results to CSV
   const handleExportCSV = () => {
@@ -270,16 +206,7 @@ export const AnalyticsPage: React.FC = () => {
             >
               <Terminal className="w-3.5 h-3.5" /> DuckDB SQL Studio
             </button>
-            <button
-              onClick={() => setActiveTab('snowflake')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${
-                activeTab === 'snowflake'
-                  ? 'bg-blue-600 text-slate-900 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-700'
-              }`}
-            >
-              <Server className="w-3.5 h-3.5" /> Snowflake Lake
-            </button>
+
           </div>
 
           <button
@@ -849,136 +776,7 @@ export const AnalyticsPage: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: SNOWFLAKE DATA WAREHOUSE */}
-      {activeTab === 'snowflake' && (
-        <div className="space-y-6">
-          {syncSuccessMessage && (
-            <div className="bg-emerald-100 border border-emerald-200 text-emerald-600 p-4 rounded-2xl flex items-center gap-3">
-              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-              <p className="text-sm">{syncSuccessMessage}</p>
-            </div>
-          )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Snowflake Status & Settings */}
-            <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                <div className="flex items-center gap-2">
-                  <Server className="w-5 h-5 text-cyan-600" />
-                  <h2 className="text-base font-bold text-slate-900">Snowflake Warehouse Connector</h2>
-                </div>
-                {snowflakeData?.config?.isConnected ? (
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-600 border border-emerald-200 text-xs font-semibold flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> Connected
-                  </span>
-                ) : (
-                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200 text-xs font-semibold flex items-center gap-1">
-                    <Server className="w-3 h-3" /> Not Connected
-                  </span>
-                )}
-              </div>
-
-              <div className="space-y-3 text-xs">
-                <div className="flex justify-between py-1.5 border-b border-slate-200">
-                  <span className="text-slate-400">Account:</span>
-                  <span className="font-mono text-slate-700 truncate max-w-[220px]">
-                    {snowflakeData?.config?.account || 'Not configured'}
-                  </span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-slate-200">
-                  <span className="text-slate-400">Warehouse:</span>
-                  <span className="font-mono text-cyan-600">{snowflakeData?.config?.warehouse || 'Pending Provisioning...'}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-slate-200">
-                  <span className="text-slate-400">Database:</span>
-                  <span className="font-mono text-slate-700">{snowflakeData?.config?.database || 'Pending...'}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-slate-200">
-                  <span className="text-slate-400">Schema:</span>
-                  <span className="font-mono text-slate-700">{snowflakeData?.config?.schema || 'Pending...'}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-slate-200">
-                  <span className="text-slate-400">Auto-Sync Schedule:</span>
-                  <span className="text-slate-700 font-semibold">{snowflakeData?.config?.syncInterval || 'DAILY (Midnight UTC)'}</span>
-                </div>
-              </div>
-
-              <div className="pt-2 flex flex-col gap-3">
-                {!snowflakeData?.config?.isConnected && (
-                  <button
-                    onClick={handleProvisionWarehouse}
-                    disabled={provisioning}
-                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white text-xs font-bold shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-                  >
-                    <Server className={`w-4 h-4 ${provisioning ? 'animate-pulse' : ''}`} />
-                    {provisioning ? 'Provisioning...' : 'Provision Dedicated Warehouse'}
-                  </button>
-                )}
-
-                <button
-                  onClick={handleTriggerSync}
-                  disabled={syncingSnowflake || !snowflakeData?.config?.isConnected}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs font-bold shadow-sm shadow-blue-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-                >
-                  <CloudLightning className={`w-4 h-4 ${syncingSnowflake ? 'animate-spin' : ''}`} />
-                  {syncingSnowflake ? 'Syncing to Snowflake...' : 'Sync Dataset Aggregations Now'}
-                </button>
-              </div>
-            </div>
-
-            {/* Synchronization History & Audit Trail */}
-            <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <Database className="w-4 h-4 text-blue-600" /> Enterprise Warehouse Sync Audit Trail
-                  </h2>
-                  <p className="text-xs text-slate-400">Historical records of analytical mart transfers to Snowflake</p>
-                </div>
-              </div>
-
-              {snowflakeData?.recentSyncs && snowflakeData.recentSyncs.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-slate-600">
-                    <thead className="bg-slate-50 text-slate-400 font-semibold border-b border-slate-200">
-                      <tr>
-                        <th className="px-3 py-2.5">Target Table</th>
-                        <th className="px-3 py-2.5">Records</th>
-                        <th className="px-3 py-2.5">Duration</th>
-                        <th className="px-3 py-2.5">Status</th>
-                        <th className="px-3 py-2.5">Timestamp</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 font-mono">
-                      {snowflakeData.recentSyncs.map((sync) => (
-                        <tr key={sync.id} className="hover:bg-slate-50">
-                          <td className="px-3 py-2.5 text-cyan-700 font-medium truncate max-w-[200px]" title={sync.targetTable}>
-                            {sync.targetTable}
-                          </td>
-                          <td className="px-3 py-2.5 text-slate-900 font-bold">{sync.recordsSynced.toLocaleString()}</td>
-                          <td className="px-3 py-2.5 text-slate-400">{sync.durationMs}ms</td>
-                          <td className="px-3 py-2.5">
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600 border border-emerald-200 text-[10px] font-sans font-semibold">
-                              {sync.status}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5 text-slate-400 text-[11px] font-sans">
-                            {new Date(sync.createdAt).toLocaleTimeString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="p-8 text-center text-slate-400 text-xs">
-                  No synchronization runs yet. Click "Sync Dataset Aggregations Now" to push clinical marts to Snowflake.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

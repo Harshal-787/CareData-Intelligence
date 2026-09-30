@@ -1,3 +1,4 @@
+//go:build ignore
 package main
 
 import (
@@ -22,5 +23,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Storage path: %s\n", storagePath)
+	fmt.Printf("Storage path: %s
+", storagePath)
 }

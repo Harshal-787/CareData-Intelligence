@@ -107,11 +107,20 @@ func (s *AIService) AskQuestion(userID, orgID string, req domain.AIChatRequest) 
 		objectName = "demodata.parquet" // fallback for demo
 	}
 
+	modelName := "gemini-3.6-flash"
+	if settings, err := s.repo.GetPlatformSettings(); err == nil && settings != nil {
+		if settings.DefaultLLMModel != "" {
+			modelName = settings.DefaultLLMModel
+		}
+	}
+
 	payload := map[string]interface{}{
 		"question":    req.Question,
 		"bucket":      "raw-data",
 		"object_name": objectName,
+		"model":       modelName,
 	}
+
 	
 	payloadBytes, _ := json.Marshal(payload)
 	
@@ -257,11 +266,19 @@ func (s *AIService) GenerateNarrative(orgID, datasetID string) (*domain.AINarrat
 		dataEngineURL = "http://localhost:8000"
 	}
 
+	modelName := "gemini-3.6-flash"
+	if settings, err := s.repo.GetPlatformSettings(); err == nil && settings != nil {
+		if settings.DefaultLLMModel != "" {
+			modelName = settings.DefaultLLMModel
+		}
+	}
+
 	payload := map[string]interface{}{
 		"title":       "Narrative Insight",
 		"dataset_name": datasetName,
 		"bucket":      "raw-data",
 		"object_name": objectName,
+		"model":       modelName,
 	}
 	payloadBytes, _ := json.Marshal(payload)
 
@@ -306,11 +323,19 @@ func (s *AIService) GenerateReport(userID, orgID string, req domain.AIReportRequ
 		dataEngineURL = "http://localhost:8000"
 	}
 
+	modelName := "gemini-3.6-flash"
+	if settings, err := s.repo.GetPlatformSettings(); err == nil && settings != nil {
+		if settings.DefaultLLMModel != "" {
+			modelName = settings.DefaultLLMModel
+		}
+	}
+
 	payload := map[string]interface{}{
 		"title":       title,
 		"dataset_name": datasetName,
 		"bucket":      "raw-data",
 		"object_name": objectName,
+		"model":       modelName,
 	}
 	payloadBytes, _ := json.Marshal(payload)
 

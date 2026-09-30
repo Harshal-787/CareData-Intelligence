@@ -19,8 +19,22 @@ type Organization struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	Slug      string    `json:"slug"`
+	IsActive  bool      `json:"isActive"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type PlatformSettings struct {
+	ID                  string    `json:"id"`
+	PlatformName        string    `json:"platformName"`
+	SupportEmail        string    `json:"supportEmail"`
+	MaintenanceMode     bool      `json:"maintenanceMode"`
+	Enforce2FAGlobally  bool      `json:"enforce2FAGlobally"`
+	SessionTimeoutMins  int       `json:"sessionTimeoutMins"`
+	GeminiAPIKey        string    `json:"geminiAPIKey"`
+	DefaultLLMModel     string    `json:"defaultLLMModel"`
+	LLMTemperature      float64   `json:"llmTemperature"`
+	UpdatedAt           time.Time `json:"updatedAt"`
 }
 
 type User struct {
@@ -31,6 +45,10 @@ type User struct {
 	TOTPSecret     string    `json:"-"`
 	TOTPEnabled    bool      `json:"totpEnabled"`
 	FullName       string    `json:"fullName"`
+	JobTitle       string    `json:"jobTitle"`
+	Department     string    `json:"department"`
+	NPINumber      string    `json:"npiNumber"`
+	Phone          string    `json:"phone"`
 	Role           Role      `json:"role"`
 	IsActive       bool      `json:"isActive"`
 	CreatedAt      time.Time `json:"createdAt"`
@@ -74,6 +92,10 @@ type RegisterRequest struct {
 	FullName         string `json:"fullName"`
 	Email            string `json:"email"`
 	Password         string `json:"password"`
+	JobTitle         string `json:"jobTitle"`
+	Department       string `json:"department"`
+	NPINumber        string `json:"npiNumber"`
+	Phone            string `json:"phone"`
 	Role             Role   `json:"role,omitempty"` // Default ORG_ADMIN
 }
 
@@ -83,14 +105,22 @@ type RegisterUserRequest struct {
 	FullName       string `json:"fullName"`
 	Email          string `json:"email"`
 	Password       string `json:"password"`
+	JobTitle       string `json:"jobTitle"`
+	Department     string `json:"department"`
+	NPINumber      string `json:"npiNumber"`
+	Phone          string `json:"phone"`
 	Role           Role   `json:"role"`
 }
 
 type CreateUserRequest struct {
-	FullName string `json:"fullName"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Role     Role   `json:"role"`
+	FullName   string `json:"fullName"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	JobTitle   string `json:"jobTitle"`
+	Department string `json:"department"`
+	NPINumber  string `json:"npiNumber"`
+	Phone      string `json:"phone"`
+	Role       Role   `json:"role"`
 }
 
 type AuthResponse struct {
@@ -103,7 +133,12 @@ type UserResponse struct {
 	ID             string        `json:"id"`
 	Email          string        `json:"email"`
 	FullName       string        `json:"fullName"`
+	JobTitle       string        `json:"jobTitle"`
+	Department     string        `json:"department"`
+	NPINumber      string        `json:"npiNumber"`
+	Phone          string        `json:"phone"`
 	Role           Role          `json:"role"`
+	IsActive       bool          `json:"isActive"`
 	OrganizationID string        `json:"organizationId"`
 	Organization   *Organization `json:"organization,omitempty"`
 }
@@ -574,6 +609,7 @@ type SnowflakeConfig struct {
 	Schema         string    `json:"schema"`
 	Role           string    `json:"role"`
 	Username       string    `json:"username"`
+	Password       string    `json:"password"`
 	IsConnected    bool      `json:"isConnected"`
 	AutoSync       bool      `json:"autoSync"`
 	SyncInterval   string    `json:"syncInterval"` // "HOURLY", "DAILY", "MANUAL"

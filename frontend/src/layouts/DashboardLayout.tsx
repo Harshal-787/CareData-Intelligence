@@ -12,7 +12,6 @@ import {
   Bot,
   Activity,
   FileSpreadsheet,
-  Settings2,
   ShieldCheck,
   ChevronDown,
   Menu,
@@ -21,7 +20,6 @@ import {
   Search,
   Bell,
   X,
-  LogOut,
   Settings
 } from 'lucide-react';
 import { BrandLogo } from '../components/common/BrandLogo';
@@ -33,33 +31,29 @@ interface NavItem {
   icon: React.ElementType;
   roles: Role[];
   badge?: string;
+  section?: 'workspace' | 'admin';
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Overview', path: '/dashboard', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'DATA_ANALYST', 'VIEWER'] },
-  { label: 'Datasets & Lake', path: '/datasets', icon: Database, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'DATA_ANALYST'] },
-  { label: 'Data quality', path: '/quality', icon: CheckCircle2, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'DATA_ANALYST', 'VIEWER'] },
-  { label: 'Patient deduplication', path: '/deduplication', icon: Users2, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'DATA_ANALYST'] },
-  { label: 'Healthcare analytics', path: '/analytics', icon: BarChart3, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'DATA_ANALYST', 'VIEWER'] },
-  { label: 'ML risk & anomalies', path: '/ml-predictions', icon: BrainCircuit, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'DATA_ANALYST'] },
-  { label: 'Ask AI', path: '/ai-insights', icon: Bot, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'DATA_ANALYST'], badge: 'AI' },
-  { label: 'Pipeline orchestrator', path: '/pipelines', icon: Activity, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'DATA_ANALYST'], badge: 'RUN' },
-  { label: 'Clinical reports', path: '/reports', icon: FileSpreadsheet, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'DATA_ANALYST', 'VIEWER'] },
-  { label: 'User Management', path: '/admin/users', icon: ShieldCheck, roles: ['SUPER_ADMIN', 'ORG_ADMIN'] },
-  { label: 'Audit Logs', path: '/admin/audit-logs', icon: Settings, roles: ['SUPER_ADMIN', 'ORG_ADMIN'] },
+  { label: 'Overview', path: '/dashboard', icon: LayoutDashboard, roles: ['ORG_ADMIN', 'DATA_ANALYST', 'VIEWER'], section: 'workspace' },
+  { label: 'Datasets & Lake', path: '/datasets', icon: Database, roles: ['ORG_ADMIN', 'DATA_ANALYST'], section: 'workspace' },
+  { label: 'Data quality', path: '/quality', icon: CheckCircle2, roles: ['ORG_ADMIN', 'DATA_ANALYST', 'VIEWER'], section: 'workspace' },
+  { label: 'Patient deduplication', path: '/deduplication', icon: Users2, roles: ['ORG_ADMIN', 'DATA_ANALYST'], section: 'workspace' },
+  { label: 'Healthcare analytics', path: '/analytics', icon: BarChart3, roles: ['ORG_ADMIN', 'DATA_ANALYST', 'VIEWER'], section: 'workspace' },
+  { label: 'ML risk & anomalies', path: '/ml-predictions', icon: BrainCircuit, roles: ['ORG_ADMIN', 'DATA_ANALYST'], section: 'workspace' },
+  { label: 'Ask AI', path: '/ai-insights', icon: Bot, roles: ['ORG_ADMIN', 'DATA_ANALYST'], badge: 'AI', section: 'workspace' },
+  { label: 'Pipeline orchestrator', path: '/pipelines', icon: Activity, roles: ['ORG_ADMIN', 'DATA_ANALYST'], badge: 'RUN', section: 'workspace' },
+  { label: 'Clinical reports', path: '/reports', icon: FileSpreadsheet, roles: ['ORG_ADMIN', 'DATA_ANALYST', 'VIEWER'], section: 'workspace' },
+  { label: 'User Management', path: '/admin/users', icon: ShieldCheck, roles: ['ORG_ADMIN'], section: 'workspace' },
+  { label: 'Audit Logs', path: '/admin/audit-logs', icon: Settings, roles: ['ORG_ADMIN'], section: 'workspace' },
 ];
 
 export const DashboardLayout: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
 
   const filteredNavItems = NAV_ITEMS.filter((item) =>
     user ? item.roles.includes(user.role) : false
@@ -99,11 +93,11 @@ export const DashboardLayout: React.FC = () => {
         <div className="flex-1 overflow-y-auto px-3 py-7">
           {!collapsed && (
             <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[.16em] text-slate-400">
-              Platform
+              Healthcare Workspace
             </p>
           )}
           <nav className="space-y-1">
-            {filteredNavItems.map((item) => {
+            {filteredNavItems.filter(i => i.section !== 'admin').map((item) => {
               const Icon = item.icon;
               const isActive = activeItem?.path === item.path;
               return (
@@ -138,36 +132,7 @@ export const DashboardLayout: React.FC = () => {
           </nav>
         </div>
 
-        <div className="border-t border-slate-100 p-3">
-          {!collapsed && (
-            <div className="mb-3 flex items-center gap-3 rounded-xl bg-slate-50 p-3 border border-slate-100/50">
-              <div className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 text-[11px] font-bold text-white shadow-inner shadow-white/20">
-                {user?.fullName.slice(0, 2).toUpperCase() || 'CD'}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[11px] font-bold text-slate-900">{user?.fullName}</p>
-                <p className="truncate text-[10px] text-slate-400">{user?.role.replace('_', ' ')}</p>
-              </div>
-              <button onClick={handleLogout} className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-white hover:text-red-500 hover:shadow-sm transition-all border border-transparent hover:border-slate-200">
-                <LogOut className="size-4" />
-              </button>
-            </div>
-          )}
-          
-          <button className={cn(
-            "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors border border-transparent",
-            collapsed && "justify-center px-2"
-          )}>
-            <Settings2 className="size-4 shrink-0" />
-            {!collapsed && "Settings"}
-          </button>
-          
-          {collapsed && (
-             <button onClick={handleLogout} className="mt-1 flex w-full items-center justify-center gap-3 rounded-xl px-2 py-2.5 text-xs font-medium text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors">
-               <LogOut className="size-4 shrink-0" />
-             </button>
-          )}
-        </div>
+
       </aside>
 
       {mobileOpen && (
@@ -213,13 +178,16 @@ export const DashboardLayout: React.FC = () => {
             
             <div className="h-6 w-px bg-slate-200 hidden sm:block" />
             
-            <div className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1.5 pr-2 rounded-xl transition-colors border border-transparent hover:border-slate-100">
+            <div 
+              onClick={() => navigate('/settings')}
+              className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1.5 pr-2 rounded-xl transition-colors border border-transparent hover:border-slate-100"
+            >
               <div className="grid size-8 place-items-center rounded-full bg-cyan-100 text-[10px] font-bold text-cyan-700 shadow-inner shadow-white/50">
-                {user?.organization?.name?.slice(0, 2).toUpperCase() || 'ORG'}
+                {user?.fullName?.slice(0, 2).toUpperCase() || 'US'}
               </div>
               <div className="hidden leading-tight sm:block min-w-[80px]">
-                <p className="text-[11px] font-bold text-slate-900 truncate max-w-[120px]">{user?.organization?.name || 'CareData Health'}</p>
-                <p className="text-[10px] text-slate-400 truncate max-w-[120px]">Active instance</p>
+                <p className="text-[11px] font-bold text-slate-900 truncate max-w-[120px]">{user?.fullName || 'User Name'}</p>
+                <p className="text-[10px] text-slate-400 truncate max-w-[120px]">{user?.role?.replace('_', ' ') || 'Role'}</p>
               </div>
               <ChevronDown className="hidden size-3.5 text-slate-400 sm:block" />
             </div>

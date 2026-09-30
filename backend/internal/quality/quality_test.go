@@ -1,6 +1,7 @@
 package quality
 
 import (
+	"io"
 	"testing"
 
 	"caredata/backend/internal/domain"
@@ -48,6 +49,21 @@ func TestICD10Regex(t *testing.T) {
 	}
 }
 
+type mockIterator struct {
+	rows []map[string]interface{}
+	idx  int
+}
+
+func (m *mockIterator) Next() (map[string]interface{}, error) {
+	if m.idx >= len(m.rows) {
+		return nil, io.EOF
+	}
+	res := m.rows[m.idx]
+	m.idx++
+	return res, nil
+}
+func (m *mockIterator) Close() error { return nil }
+
 func TestProfileDataset(t *testing.T) {
 	schema := []domain.DatasetColumn{
 		{Name: "patient_id", DataType: "STRING"},
@@ -62,7 +78,7 @@ func TestProfileDataset(t *testing.T) {
 		{"patient_id": "P004", "age": nil, "systolic_bp": 135.0},
 	}
 
-	profiles := ProfileDataset(schema, rows)
+	profiles := ProfileDataset(schema, &mockIterator{rows: rows})
 	if len(profiles) != 3 {
 		t.Fatalf("expected 3 column profiles, got %d", len(profiles))
 	}
@@ -113,7 +129,7 @@ func TestEvaluateQualityAndRules(t *testing.T) {
 		},
 	}
 
-	res := EvaluateQualityAndRules("ds-1", "org-1", schema, rows, rules)
+	res := EvaluateQualityAndRules("ds-1", "org-1", schema, &mockIterator{rows: rows}, rules)
 	if len(res.Violations) != 2 {
 		t.Fatalf("expected 2 violations, got %d", len(res.Violations))
 	}
