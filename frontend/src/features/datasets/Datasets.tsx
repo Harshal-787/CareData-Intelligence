@@ -26,6 +26,7 @@ import {
 } from '../../api/datasets';
 import { Dataset, DatasetStats } from '../../types/dataset';
 import { DatasetUploadModal } from './DatasetUploadModal';
+import { SnowflakeImportModal } from './SnowflakeImportModal';
 import { DatasetDetailDrawer } from './DatasetDetailDrawer';
 import { cn } from '../../lib/utils';
 
@@ -36,6 +37,7 @@ export const DatasetsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isSnowflakeModalOpen, setIsSnowflakeModalOpen] = useState(false);
   const [sampleMenuOpen, setSampleMenuOpen] = useState(false);
   const [selectedDataset, setSelectedDataset] = useState<Dataset | null>(null);
   const [generatingSample, setGeneratingSample] = useState(false);
@@ -204,6 +206,15 @@ export const DatasetsPage: React.FC = () => {
             )}
           </div>
 
+          {/* Snowflake Import Button */}
+          <button
+            onClick={() => setIsSnowflakeModalOpen(true)}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-200 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-indigo-600"
+          >
+            <Database className="size-3.5" />
+            <span>Import Snowflake</span>
+          </button>
+
           {/* Upload Button */}
           <button
             onClick={() => setIsUploadOpen(true)}
@@ -362,6 +373,12 @@ export const DatasetsPage: React.FC = () => {
               >
                 Load sample EHR
               </button>
+              <button
+                onClick={() => setIsSnowflakeModalOpen(true)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-blue-600 hover:bg-slate-50 transition flex items-center gap-1.5"
+              >
+                <Database className="size-3.5" /> Import Snowflake
+              </button>
             </div>
           </div>
         ) : (
@@ -500,6 +517,12 @@ export const DatasetsPage: React.FC = () => {
           setDatasets((prev) => [newDs, ...prev]);
           loadData();
         }}
+      />
+
+      {/* Snowflake Import Modal */}
+      <SnowflakeImportModal
+        isOpen={isSnowflakeModalOpen}
+        onClose={() => setIsSnowflakeModalOpen(false)}
       />
 
       {/* Dataset Detail Drawer */}

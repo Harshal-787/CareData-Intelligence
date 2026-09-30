@@ -185,6 +185,7 @@ func main() {
 			r.Get("/analytics/clinical-metrics", analyticsH.GetClinicalMetrics)
 			r.Post("/analytics/query", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(analyticsH.ExecuteQuery)).ServeHTTP)
 			r.Get("/analytics/snowflake/status", analyticsH.GetSnowflakeStatus)
+			r.Get("/analytics/snowflake/tables", analyticsH.GetSnowflakeTables)
 			r.Put("/analytics/snowflake/config", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin)(http.HandlerFunc(analyticsH.UpdateSnowflakeConfig)).ServeHTTP)
 			r.Post("/analytics/snowflake/sync", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(analyticsH.TriggerSnowflakeSync)).ServeHTTP)
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"caredata/backend/internal/domain"
@@ -43,6 +44,32 @@ func NewSnowflakeClient() *SnowflakeClient {
 	return &SnowflakeClient{
 		adminDB: db,
 	}
+}
+
+// UpdateConnection dynamically updates the Snowflake connection using provided credentials
+func (c *SnowflakeClient) UpdateConnection(account, user, password, role string) error {
+	if role == "" {
+		role = "ACCOUNTADMIN"
+	}
+	dsn := fmt.Sprintf("%s:%s@%s/?role=%s", user, password, account, role)
+	db, err := sql.Open("snowflake", dsn)
+	if err != nil {
+		return fmt.Errorf("failed to connect to Snowflake: %w", err)
+	}
+
+	// Verify connection
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return fmt.Errorf("failed to ping Snowflake: %w", err)
+	}
+
+	// Close old connection if exists
+	if c.adminDB != nil {
+		c.adminDB.Close()
+	}
+
+	c.adminDB = db
+	return nil
 }
 
 // ProvisionTenant creates a dedicated Warehouse and Schema for the given organization.
@@ -278,4 +305,71 @@ func (c *SnowflakeClient) SyncDatasetToSnowflake(orgID string, filePath string) 
 	}
 
 	return totalLoaded, nil
+}
+
+// GetTables returns a list of tables from the configured schema.
+func (c *SnowflakeClient) GetTables(orgID string) ([]map[string]interface{}, error) {
+	if c.adminDB == nil {
+		return nil, fmt.Errorf("snowflake client not initialized or not connected")
+	}
+
+	orgIDClean := strings.ReplaceAll(orgID, "-", "_")
+	schemaName := fmt.Sprintf("SCHEMA_ORG_%s", orgIDClean)
+	databaseName := "CAREDATA_DB"
+
+	query := fmt.Sprintf("SHOW TABLES IN SCHEMA %s.%s", databaseName, schemaName)
+	rows, err := c.adminDB.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch tables: %w", err)
+	}
+	defer rows.Close()
+
+	var tables []map[string]interface{}
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		columns := make([]interface{}, len(cols))
+		columnPointers := make([]interface{}, len(cols))
+		for i := range columns {
+			columnPointers[i] = &columns[i]
+		}
+		if err := rows.Scan(columnPointers...); err != nil {
+			continue
+		}
+
+		m := make(map[string]interface{})
+		for i, colName := range cols {
+			val := columnPointers[i].(*interface{})
+			if val != nil && *val != nil {
+				m[colName] = *val
+			}
+		}
+		
+		// Map standard Snowflake SHOW TABLES columns to our format
+		name := ""
+		if v, ok := m["name"]; ok {
+			name = fmt.Sprintf("%v", v)
+		}
+		
+		rowsCount := "0"
+		if v, ok := m["rows"]; ok {
+			rowsCount = fmt.Sprintf("%v", v)
+		}
+		
+		sizeStr := "0 B"
+		if v, ok := m["bytes"]; ok {
+			bytes, _ := strconv.ParseInt(fmt.Sprintf("%v", v), 10, 64)
+			sizeStr = fmt.Sprintf("%d MB", bytes/1024/1024)
+		}
+		
+		tables = append(tables, map[string]interface{}{
+			"name": name,
+			"rows": rowsCount,
+			"size": sizeStr,
+		})
+	}
+	return tables, nil
 }
