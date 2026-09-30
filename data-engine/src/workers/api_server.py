@@ -28,6 +28,10 @@ class QueryRequest(BaseModel):
     bucket: str = "raw-data"
     object_name: str = ""
 
+class OverviewRequest(BaseModel):
+    bucket: str = "raw-data"
+    object_names: List[str] = []
+
 class MLRunRequest(BaseModel):
     bucket: str = "raw-data"
     object_name: str = ""
@@ -51,16 +55,20 @@ def execute_query(req: QueryRequest):
         raise HTTPException(status_code=400, detail="object_name is required")
         
     try:
+        import time
+        start = time.time()
         loader = DataLoader()
         # Load parquet to DuckDB view
         loader.load_dataset_to_duckdb(req.bucket, req.object_name, table_name="clinical_data")
+        loader.load_dataset_to_duckdb(req.bucket, req.object_name, table_name="clinical_encounters")
         
         # Execute query
         df = loader.get_query_result(req.query)
         
         # Convert to records
         records = df.to_dict(orient="records")
-        return {"records": records, "count": len(records)}
+        duration_ms = (time.time() - start) * 1000.0
+        return {"records": records, "count": len(records), "execution_time_ms": duration_ms}
     except Exception as e:
         logger.error(f"Query execution failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -147,6 +155,118 @@ def _get_dataset_statistics(loader: DataLoader, bucket: str, object_name: str) -
     except Exception as e:
         logger.error(f"Failed to extract statistics: {e}")
     return stats
+
+@app.post("/api/v1/analytics/overview")
+def get_analytics_overview(req: OverviewRequest):
+    if not req.object_names:
+        return {}
+        
+    try:
+        loader = DataLoader()
+        loader.load_dataset_to_duckdb(req.bucket, req.object_names[0], table_name="clinical_data")
+        
+        # KPIs
+        kpi_query = """
+        SELECT 
+            count(*) as total_encounters,
+            count(distinct patient_id) as active_patients,
+            count(distinct provider_npi) as unique_providers,
+            avg(length_of_stay) as avg_los,
+            avg(case when cast(is_readmitted_30d as varchar) = 'true' or cast(is_readmitted_30d as varchar) = '1' then 1.0 else 0.0 end)*100 as readmission_pct,
+            avg(case when lower(admission_type) like '%emerg%' then 1.0 else 0.0 end)*100 as emergency_pct,
+            sum(billing_amount) as total_cost,
+            avg(billing_amount) as avg_cost
+        FROM clinical_data
+        """
+        df_kpi = loader.get_query_result(kpi_query)
+        
+        # Top Diagnoses
+        diag_query = """
+        SELECT 
+            icd10_code,
+            diagnosis_description as diagnosis_name,
+            count(*) as count,
+            avg(length_of_stay) as avg_los,
+            avg(case when cast(is_readmitted_30d as varchar) = 'true' or cast(is_readmitted_30d as varchar) = '1' then 1.0 else 0.0 end)*100 as readmission_rate,
+            avg(billing_amount) as avg_cost
+        FROM clinical_data
+        GROUP BY icd10_code, diagnosis_description
+        ORDER BY count DESC LIMIT 10
+        """
+        df_diag = loader.get_query_result(diag_query)
+        
+        # Departments
+        dept_query = """
+        SELECT
+            department,
+            count(*) as count,
+            avg(length_of_stay) as avg_los,
+            avg(billing_amount) as avg_cost,
+            sum(billing_amount) as total_cost,
+            avg(case when cast(is_readmitted_30d as varchar) = 'true' or cast(is_readmitted_30d as varchar) = '1' then 1.0 else 0.0 end)*100 as readmission_rate
+        FROM clinical_data
+        GROUP BY department
+        ORDER BY count DESC
+        """
+        df_dept = loader.get_query_result(dept_query)
+        
+        # Gender
+        gender_query = "SELECT gender, count(*) as count FROM clinical_data GROUP BY gender"
+        df_gender = loader.get_query_result(gender_query)
+        
+        # Age Cohorts
+        age_query = """
+        SELECT 
+            CASE 
+                WHEN age < 18 THEN '< 18'
+                WHEN age <= 35 THEN '18–35'
+                WHEN age <= 50 THEN '36–50'
+                WHEN age <= 65 THEN '51–65'
+                ELSE '65+'
+            END as cohort_label,
+            count(*) as count,
+            avg(length_of_stay) as avg_los,
+            sum(billing_amount) as total_cost
+        FROM clinical_data
+        GROUP BY 1
+        """
+        df_age = loader.get_query_result(age_query)
+        
+        # Payer mix
+        payer_query = """
+        SELECT insurance_provider as payer_name, count(*) as count, sum(billing_amount) as total_billed
+        FROM clinical_data GROUP BY insurance_provider
+        """
+        df_payer = loader.get_query_result(payer_query)
+        
+        # Volume Trends
+        trend_query = """
+        SELECT 
+            substring(cast(admission_date as varchar) from 1 for 7) as period,
+            count(*) as total_volume,
+            sum(case when cast(is_readmitted_30d as varchar) = 'true' or cast(is_readmitted_30d as varchar) = '1' then 1 else 0 end) as discharges,
+            sum(case when lower(admission_type) like '%emerg%' then 1 else 0 end) as emergency,
+            sum(case when lower(admission_type) like '%inpatient%' then 1 else 0 end) as inpatient,
+            sum(case when lower(admission_type) like '%inpatient%' then 1 else 0 end) as admissions,
+            sum(case when lower(admission_type) not like '%emerg%' and lower(admission_type) not like '%inpatient%' then 1 else 0 end) as outpatient
+        FROM clinical_data
+        GROUP BY 1
+        ORDER BY 1 ASC
+        """
+        df_trend = loader.get_query_result(trend_query)
+        
+        return {
+            "kpis": df_kpi.fillna(0).to_dict(orient="records")[0] if not df_kpi.empty else {},
+            "top_diagnoses": df_diag.fillna(0).to_dict(orient="records"),
+            "departments": df_dept.fillna(0).to_dict(orient="records"),
+            "gender_breakdown": df_gender.fillna(0).to_dict(orient="records"),
+            "age_cohorts": df_age.fillna(0).to_dict(orient="records"),
+            "payer_mix": df_payer.fillna(0).to_dict(orient="records"),
+            "volume_trends": df_trend.fillna(0).to_dict(orient="records"),
+        }
+    except Exception as e:
+        logger.error(f"Overview generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/ai/narrative")
 def generate_narrative(req: InsightRequest):

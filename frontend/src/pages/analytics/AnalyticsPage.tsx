@@ -398,7 +398,7 @@ export const AnalyticsPage: React.FC = () => {
                 <Users className="w-4 h-4 text-blue-400" />
               </div>
               <div className="text-2xl font-bold text-white tracking-tight">
-                {kpis?.totalEncounters ? kpis.totalEncounters.toLocaleString() : '14,280'}
+                {kpis?.totalEncounters ? kpis.totalEncounters.toLocaleString() : '0'}
               </div>
               <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-400">
                 <TrendingUp className="w-3.5 h-3.5" />
@@ -413,7 +413,7 @@ export const AnalyticsPage: React.FC = () => {
                 <Clock className="w-4 h-4 text-cyan-400" />
               </div>
               <div className="text-2xl font-bold text-white tracking-tight">
-                {kpis?.averageLosDays ? `${kpis.averageLosDays} Days` : '4.2 Days'}
+                {kpis?.averageLosDays ? `${kpis.averageLosDays} Days` : 'N/A'}
               </div>
               <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-400">
                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -428,7 +428,7 @@ export const AnalyticsPage: React.FC = () => {
                 <HeartPulse className="w-4 h-4 text-rose-400" />
               </div>
               <div className="text-2xl font-bold text-white tracking-tight">
-                {kpis?.readmissionRatePct ? `${kpis.readmissionRatePct}%` : '11.8%'}
+                {kpis?.readmissionRatePct ? `${kpis.readmissionRatePct}%` : 'N/A'}
               </div>
               <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-400">
                 <span>1.4% below benchmark</span>
@@ -442,7 +442,7 @@ export const AnalyticsPage: React.FC = () => {
                 <Activity className="w-4 h-4 text-purple-400" />
               </div>
               <div className="text-2xl font-bold text-white tracking-tight">
-                {kpis?.activePatients ? kpis.activePatients.toLocaleString() : '11,560'}
+                {kpis?.activePatients ? kpis.activePatients.toLocaleString() : '0'}
               </div>
               <div className="mt-2 text-xs text-slate-400">
                 <span>Across {kpis?.datasetsCount || 3} source datasets</span>
@@ -456,7 +456,7 @@ export const AnalyticsPage: React.FC = () => {
                 <BedDouble className="w-4 h-4 text-amber-400" />
               </div>
               <div className="text-2xl font-bold text-white tracking-tight">
-                {kpis?.emergencyRatioPct ? `${kpis.emergencyRatioPct}%` : '26.0%'}
+                {kpis?.emergencyRatioPct ? `${kpis.emergencyRatioPct}%` : 'N/A'}
               </div>
               <div className="mt-2 text-xs text-amber-400">
                 <span>Triage acuity: Moderate</span>
@@ -472,10 +472,10 @@ export const AnalyticsPage: React.FC = () => {
               <div className="text-2xl font-bold text-white tracking-tight">
                 {kpis?.totalIncurredCost
                   ? `$${(kpis.totalIncurredCost / 1000000).toFixed(1)}M`
-                  : '$92.1M'}
+                  : 'N/A'}
               </div>
               <div className="mt-2 text-xs text-slate-400">
-                <span>Avg: ${kpis?.averageCostPerVisit ? kpis.averageCostPerVisit.toLocaleString() : '6,450'}/visit</span>
+                <span>Avg: ${kpis?.averageCostPerVisit ? kpis.averageCostPerVisit.toLocaleString() : '0'}/visit</span>
               </div>
             </div>
           </div>
@@ -506,8 +506,8 @@ export const AnalyticsPage: React.FC = () => {
 
               {/* Bar / Column Chart Visualization */}
               <div className="h-64 flex items-end gap-3 pt-6 pb-2 px-2">
-                {analyticsData?.volumeTrends.map((point) => {
-                  const maxVol = Math.max(...(analyticsData?.volumeTrends.map((p) => p.totalVolume) || [3000]));
+                {analyticsData?.volumeTrends?.map((point) => {
+                  const maxVol = Math.max(...(analyticsData?.volumeTrends?.map((p) => p.totalVolume) || [3000]));
                   const heightPct = Math.min(100, Math.max(15, (point.totalVolume / maxVol) * 100));
                   return (
                     <div key={point.period} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group relative">
@@ -547,7 +547,7 @@ export const AnalyticsPage: React.FC = () => {
               </div>
 
               <div className="space-y-3 overflow-y-auto max-h-64 pr-1">
-                {analyticsData?.topDiagnoses.map((diag, idx) => (
+                {analyticsData?.topDiagnoses?.map((diag, idx) => (
                   <div key={diag.icd10Code + idx} className="bg-slate-950 border border-slate-800/80 rounded-lg p-2.5 hover:border-slate-700 transition-colors">
                     <div className="flex items-center justify-between text-xs mb-1">
                       <div className="flex items-center gap-1.5 font-semibold text-slate-200">
@@ -595,7 +595,7 @@ export const AnalyticsPage: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {analyticsData?.departments.map((dept) => (
+              {analyticsData?.departments?.map((dept) => (
                 <div key={dept.department} className="bg-slate-950 border border-slate-800 rounded-xl p-4 hover:border-purple-500/30 transition-colors">
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="font-bold text-white text-sm truncate" title={dept.department}>
@@ -653,7 +653,7 @@ export const AnalyticsPage: React.FC = () => {
                 <Users className="w-4 h-4 text-blue-400" /> Patient Age Stratification
               </h2>
               <div className="space-y-3">
-                {analyticsData?.ageCohorts.map((cohort) => (
+                {analyticsData?.ageCohorts?.map((cohort) => (
                   <div key={cohort.cohortLabel} className="space-y-1">
                     <div className="flex justify-between text-xs text-slate-300">
                       <span className="font-medium">Age {cohort.cohortLabel}</span>
@@ -676,7 +676,7 @@ export const AnalyticsPage: React.FC = () => {
                 <DollarSign className="w-4 h-4 text-emerald-400" /> Insurance & Payer Mix Distribution
               </h2>
               <div className="space-y-3">
-                {analyticsData?.payerMix.map((payer) => (
+                {analyticsData?.payerMix?.map((payer) => (
                   <div key={payer.payerName} className="space-y-1">
                     <div className="flex justify-between text-xs text-slate-300">
                       <span className="font-medium">{payer.payerName}</span>

@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -45,8 +44,59 @@ func (s *AnalyticsService) GetOverview(orgID string, filter domain.AnalyticsFilt
 		return nil, fmt.Errorf("failed to fetch datasets for analytics: %w", err)
 	}
 
-	records := s.loadRecordsFromDatasets(datasets, 5000)
-	resp := s.engine.ComputeOverviewAggregations(datasets, records, filter)
+	if len(datasets) == 0 {
+		return &domain.AnalyticsOverviewResponse{
+			CalculatedAt: time.Now(),
+		}, nil
+	}
+
+	objectNames := []string{}
+	for _, d := range datasets {
+		if d.StoragePath != "" {
+			objectNames = append(objectNames, d.StoragePath)
+		}
+	}
+
+	if len(objectNames) == 0 {
+		return &domain.AnalyticsOverviewResponse{
+			CalculatedAt: time.Now(),
+		}, nil
+	}
+
+	payload := map[string]interface{}{
+		"bucket":       "raw-data",
+		"object_names": objectNames,
+	}
+
+	payloadBytes, _ := json.Marshal(payload)
+
+	dataEngineURL := os.Getenv("DATA_ENGINE_URL")
+	if dataEngineURL == "" {
+		dataEngineURL = "http://localhost:8000"
+	}
+
+	httpResp, err := http.Post(fmt.Sprintf("%s/api/v1/analytics/overview", dataEngineURL), "application/json", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to reach python data engine for overview: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	var pyResp struct {
+		KPIs            map[string]interface{}   `json:"kpis"`
+		TopDiagnoses    []map[string]interface{} `json:"top_diagnoses"`
+		Departments     []map[string]interface{} `json:"departments"`
+		GenderBreakdown []map[string]interface{} `json:"gender_breakdown"`
+		AgeCohorts      []map[string]interface{} `json:"age_cohorts"`
+		PayerMix        []map[string]interface{} `json:"payer_mix"`
+		VolumeTrends    []map[string]interface{} `json:"volume_trends"`
+	}
+
+	if err := json.NewDecoder(httpResp.Body).Decode(&pyResp); err != nil {
+		return nil, fmt.Errorf("failed to parse data engine response: %w", err)
+	}
+
+	// Map python response back to domain models
+	resp := s.engine.FormatDuckDBOverview(datasets, filter, pyResp)
 	return &resp, nil
 }
 
@@ -112,8 +162,9 @@ func (s *AnalyticsService) ExecuteQuery(orgID string, req domain.SQLQueryRequest
 	}
 	
 	var result struct {
-		Records []map[string]interface{} `json:"records"`
-		Count   int                      `json:"count"`
+		Records         []map[string]interface{} `json:"records"`
+		Count           int                      `json:"count"`
+		ExecutionTimeMs float64                  `json:"execution_time_ms"`
 	}
 	
 	if err := json.NewDecoder(httpResp.Body).Decode(&result); err != nil {
@@ -135,7 +186,7 @@ func (s *AnalyticsService) ExecuteQuery(orgID string, req domain.SQLQueryRequest
 		Columns:         columns,
 		Rows:            result.Records,
 		TotalRows:       int64(result.Count),
-		ExecutionTimeMs: 25, // Mocked latency for now
+		ExecutionTimeMs: result.ExecutionTimeMs,
 	}
 	
 	return &res, nil
@@ -222,19 +273,34 @@ func (s *AnalyticsService) TriggerSnowflakeSync(orgID, userID, datasetID string)
 		var hasValidFile bool
 		for _, d := range datasets {
 			if d.StoragePath != "" {
-				absPath := d.StoragePath
-				if !strings.HasPrefix(absPath, "/") {
-					cwd, _ := os.Getwd()
-					absPath = filepath.Join(cwd, absPath)
-				}
-
-				if _, err := os.Stat(absPath); os.IsNotExist(err) {
-					log.Printf("⚠️ File missing for dataset %s: %s", d.ID, absPath)
+				// We must stream the file from MinIO to a temporary local file for Snowflake's PUT command
+				stream, err := s.storage.GetStream("raw-data", d.StoragePath)
+				if err != nil {
+					log.Printf("⚠️ File missing in MinIO for dataset %s: %v", d.ID, err)
 					continue
 				}
+				
+				tempFile, err := os.CreateTemp("", "snowflake-sync-*.parquet")
+				if err != nil {
+					stream.Close()
+					continue
+				}
+				tempPath := tempFile.Name()
+				
+				_, err = tempFile.ReadFrom(stream)
+				tempFile.Close()
+				stream.Close()
+				
+				if err != nil {
+					os.Remove(tempPath)
+					continue
+				}
+				
 				hasValidFile = true
 
-				rows, err := s.sf.SyncDatasetToSnowflake(orgID, absPath)
+				rows, err := s.sf.SyncDatasetToSnowflake(orgID, tempPath)
+				os.Remove(tempPath) // Clean up temp file immediately after
+				
 				if err != nil {
 					log.Printf("⚠️ Failed to sync dataset %s: %v", d.ID, err)
 					continue
