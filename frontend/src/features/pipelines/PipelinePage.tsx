@@ -17,6 +17,7 @@ import {
   Terminal,
   Check,
   Flame,
+  Trash2,
 } from 'lucide-react';
 import { pipelineApi } from '../../api/pipelineApi';
 import { fetchDatasets } from '../../api/datasets';
@@ -152,6 +153,18 @@ export const PipelinePage: React.FC = () => {
     }
   };
 
+  const handleDeleteRun = async (jobId: string) => {
+    try {
+      await pipelineApi.delete(jobId);
+      await fetchPipelinesAndStats();
+      if (selectedJob?.id === jobId) {
+        setSelectedJob(null);
+      }
+    } catch (err) {
+      console.error('Delete run failed:', err);
+    }
+  };
+
   const handleRetryRun = async (jobId: string) => {
     try {
       const res = await pipelineApi.retry(jobId);
@@ -235,7 +248,7 @@ export const PipelinePage: React.FC = () => {
               Phase 8 • Production Engine
             </span>
             <span className="text-xs text-slate-400 flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> HIPAA / SOC2 Hardened
+
             </span>
           </div>
           <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight mt-1">
@@ -450,12 +463,20 @@ export const PipelinePage: React.FC = () => {
                     </button>
                   )}
                   {selectedJob.status !== 'RUNNING' && (
-                    <button
-                      onClick={() => handleRetryRun(selectedJob.id)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 transition"
-                    >
-                      <RotateCw className="w-3.5 h-3.5 text-cyan-600" /> Re-run Pipeline
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleRetryRun(selectedJob.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 transition"
+                      >
+                        <RotateCw className="w-3.5 h-3.5 text-cyan-600" /> Re-run Pipeline
+                      </button>
+                      <button
+                        onClick={() => handleDeleteRun(selectedJob.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-semibold border border-rose-200 transition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

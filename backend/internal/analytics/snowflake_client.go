@@ -73,15 +73,10 @@ func (c *SnowflakeClient) UpdateConnection(account, user, password, role string)
 }
 
 // ProvisionTenant creates a dedicated Warehouse and Schema for the given organization.
-func (c *SnowflakeClient) ProvisionTenant(orgID string) error {
+func (c *SnowflakeClient) ProvisionTenant(orgID string, databaseName string, schemaName string, warehouseName string) error {
 	if c.adminDB == nil {
 		return fmt.Errorf("snowflake client not initialized")
 	}
-
-	orgIDClean := strings.ReplaceAll(orgID, "-", "_")
-	warehouseName := fmt.Sprintf("WH_ORG_%s", orgIDClean)
-	schemaName := fmt.Sprintf("SCHEMA_ORG_%s", orgIDClean)
-	databaseName := "CAREDATA_DB"
 
 	// 1. Ensure the Database exists
 	if _, err := c.adminDB.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", databaseName)); err != nil {
@@ -105,50 +100,33 @@ func (c *SnowflakeClient) ProvisionTenant(orgID string) error {
 		return fmt.Errorf("failed to create warehouse: %w", err)
 	}
 
-	// 4. Create standard tables (e.g., clinical_encounters)
-	createTableQuery := fmt.Sprintf(`
-		CREATE TABLE IF NOT EXISTS %s.%s.clinical_encounters (
-			encounter_id VARCHAR,
-			patient_id VARCHAR,
-			department VARCHAR,
-			length_of_stay FLOAT,
-			billing_amount FLOAT,
-			readmitted BOOLEAN,
-			icd10_code VARCHAR,
-			diagnosis_description VARCHAR,
-			admission_type VARCHAR,
-			gender VARCHAR,
-			age INTEGER
-		)
-	`, databaseName, schemaName)
-
-	if _, err := c.adminDB.Exec(createTableQuery); err != nil {
-		return fmt.Errorf("failed to create clinical_encounters table: %w", err)
-	}
-
+	// 4. Removed automatic creation of clinical_encounters table
+	// We should not be modifying the user's database structure when they just connect.
+	
 	return nil
 }
 
-// ExecuteTenantQuery executes a SQL query on behalf of a tenant using their dedicated warehouse.
-func (c *SnowflakeClient) ExecuteTenantQuery(orgID, query string) (*domain.SQLQueryResponse, error) {
+// ExecuteTenantQuery executes a SQL query using the configured warehouse, database, and schema.
+func (c *SnowflakeClient) ExecuteTenantQuery(warehouse, database, schema, query string) (*domain.SQLQueryResponse, error) {
 	if c.adminDB == nil {
 		return nil, fmt.Errorf("snowflake client not initialized")
 	}
 
-	orgIDClean := strings.ReplaceAll(orgID, "-", "_")
-	warehouseName := fmt.Sprintf("WH_ORG_%s", orgIDClean)
-	schemaName := fmt.Sprintf("SCHEMA_ORG_%s", orgIDClean)
-	databaseName := "CAREDATA_DB"
-
 	// Use specific warehouse, database, and schema
-	if _, err := c.adminDB.Exec(fmt.Sprintf("USE WAREHOUSE %s", warehouseName)); err != nil {
-		return nil, err
+	if warehouse != "" {
+		if _, err := c.adminDB.Exec(fmt.Sprintf("USE WAREHOUSE %s", warehouse)); err != nil {
+			return nil, err
+		}
 	}
-	if _, err := c.adminDB.Exec(fmt.Sprintf("USE DATABASE %s", databaseName)); err != nil {
-		return nil, err
+	if database != "" {
+		if _, err := c.adminDB.Exec(fmt.Sprintf("USE DATABASE %s", database)); err != nil {
+			return nil, err
+		}
 	}
-	if _, err := c.adminDB.Exec(fmt.Sprintf("USE SCHEMA %s", schemaName)); err != nil {
-		return nil, err
+	if schema != "" {
+		if _, err := c.adminDB.Exec(fmt.Sprintf("USE SCHEMA %s", schema)); err != nil {
+			return nil, err
+		}
 	}
 
 	rows, err := c.adminDB.Query(query)
@@ -201,18 +179,15 @@ func (c *SnowflakeClient) ExecuteTenantQuery(orgID, query string) (*domain.SQLQu
 }
 
 // SyncDatasetToSnowflake pushes a local dataset file to Snowflake's internal stage and copies it into the clinical_encounters table.
-func (c *SnowflakeClient) SyncDatasetToSnowflake(orgID string, filePath string) (int64, error) {
+func (c *SnowflakeClient) SyncDatasetToSnowflake(database, schema string, filePath string) (int64, error) {
 	if c.adminDB == nil {
 		return 0, fmt.Errorf("snowflake client not initialized")
 	}
 
-	orgIDClean := strings.ReplaceAll(orgID, "-", "_")
-	schemaName := fmt.Sprintf("SCHEMA_ORG_%s", orgIDClean)
-	databaseName := "CAREDATA_DB"
 	stageName := "caredata_internal_stage"
 
 	// 1. Create Stage
-	if _, err := c.adminDB.Exec(fmt.Sprintf("CREATE STAGE IF NOT EXISTS %s.%s.%s", databaseName, schemaName, stageName)); err != nil {
+	if _, err := c.adminDB.Exec(fmt.Sprintf("CREATE STAGE IF NOT EXISTS %s.%s.%s", database, schema, stageName)); err != nil {
 		return 0, fmt.Errorf("failed to create stage: %w", err)
 	}
 
@@ -221,7 +196,7 @@ func (c *SnowflakeClient) SyncDatasetToSnowflake(orgID string, filePath string) 
 	if !strings.HasPrefix(filePath, "/") {
 		return 0, fmt.Errorf("filePath must be absolute: %s", filePath)
 	}
-	putQuery := fmt.Sprintf("PUT file://%s @%s.%s.%s AUTO_COMPRESS=TRUE", filePath, databaseName, schemaName, stageName)
+	putQuery := fmt.Sprintf("PUT file://%s @%s.%s.%s AUTO_COMPRESS=TRUE", filePath, database, schema, stageName)
 	if _, err := c.adminDB.Exec(putQuery); err != nil {
 		return 0, fmt.Errorf("failed to PUT file to stage: %w", err)
 	}
@@ -234,7 +209,7 @@ func (c *SnowflakeClient) SyncDatasetToSnowflake(orgID string, filePath string) 
 		MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
 		ON_ERROR = 'CONTINUE'
 		FORCE = TRUE
-	`, databaseName, schemaName, databaseName, schemaName, stageName)
+	`, database, schema, database, schema, stageName)
 
 	rows, err := c.adminDB.Query(copyQuery)
 	if err != nil {
@@ -308,16 +283,16 @@ func (c *SnowflakeClient) SyncDatasetToSnowflake(orgID string, filePath string) 
 }
 
 // GetTables returns a list of tables from the configured schema.
-func (c *SnowflakeClient) GetTables(orgID string) ([]map[string]interface{}, error) {
+func (c *SnowflakeClient) GetTables(database, schema string) ([]map[string]interface{}, error) {
 	if c.adminDB == nil {
 		return nil, fmt.Errorf("snowflake client not initialized or not connected")
 	}
 
-	orgIDClean := strings.ReplaceAll(orgID, "-", "_")
-	schemaName := fmt.Sprintf("SCHEMA_ORG_%s", orgIDClean)
-	databaseName := "CAREDATA_DB"
+	if database == "" || schema == "" {
+		return nil, fmt.Errorf("database or schema is missing")
+	}
 
-	query := fmt.Sprintf("SHOW TABLES IN SCHEMA %s.%s", databaseName, schemaName)
+	query := fmt.Sprintf("SHOW TABLES IN SCHEMA %s.%s", database, schema)
 	rows, err := c.adminDB.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch tables: %w", err)

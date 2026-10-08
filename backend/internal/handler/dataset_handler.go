@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -175,6 +176,8 @@ func (h *DatasetHandler) List(w http.ResponseWriter, r *http.Request) {
 	if datasets == nil {
 		datasets = []domain.DatasetResponse{}
 	}
+
+	log.Printf("DEBUG: List datasets query - orgID: %q, search: %q, status: %q, limit: %d. Found %d datasets.", orgID, filter.Search, filter.Status, limit, len(datasets))
 
 	respondJSON(w, http.StatusOK, datasets)
 }

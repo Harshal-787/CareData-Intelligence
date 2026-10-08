@@ -67,12 +67,24 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleSaveConnection = () => {
+  const handleSaveConnection = async () => {
     setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      await updateSnowflakeConfig({
+        account: sfAccount,
+        username: sfUser,
+        password: sfPassword,
+        warehouse: sfWarehouse,
+        database: sfDatabase,
+        schema: sfSchema
+      });
       setIsConnected(true);
-    }, 500);
+      setTestStatus('success');
+    } catch (err) {
+      setTestStatus('error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (

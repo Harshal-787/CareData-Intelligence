@@ -60,8 +60,8 @@ export const DashboardHome: React.FC = () => {
     Total: pt.totalVolume
   })) || [];
   
-  // Calculate a fake "quality percentage" based on datasets score or a fallback
-  let qualityPct = 98;
+  // Calculate the average quality score from connected datasets
+  let qualityPct = 0;
   if (overview?.availableFilterOptions?.datasets?.length > 0) {
     const scores = overview.availableFilterOptions.datasets.map((d: any) => d.qualityScore || 0);
     qualityPct = Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length);

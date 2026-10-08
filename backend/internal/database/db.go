@@ -140,6 +140,7 @@ func (d *DB) migrate() error {
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS department TEXT NOT NULL DEFAULT '';`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS npi_number TEXT NOT NULL DEFAULT '';`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;`,
 		`CREATE TABLE IF NOT EXISTS audit_logs (
 			id TEXT PRIMARY KEY,
 			organization_id TEXT NOT NULL,
@@ -256,6 +257,7 @@ func (d *DB) migrate() error {
 			schema_name TEXT NOT NULL DEFAULT 'PUBLIC',
 			role_name TEXT NOT NULL DEFAULT 'ACCOUNTADMIN',
 			username TEXT NOT NULL DEFAULT 'caredata_svc_user',
+			password TEXT NOT NULL DEFAULT '',
 			is_connected BOOLEAN NOT NULL DEFAULT TRUE,
 			auto_sync BOOLEAN NOT NULL DEFAULT TRUE,
 			sync_interval TEXT NOT NULL DEFAULT 'DAILY',
@@ -293,6 +295,7 @@ func (d *DB) migrate() error {
 			total_records INTEGER NOT NULL DEFAULT 0,
 			hyperparameters_json TEXT NOT NULL DEFAULT '{}',
 			feature_importances_json TEXT NOT NULL DEFAULT '[]',
+			drift_report_json TEXT NOT NULL DEFAULT '{}',
 			error_message TEXT NOT NULL DEFAULT '',
 			created_at TIMESTAMP NOT NULL,
 			completed_at TIMESTAMP
@@ -391,19 +394,21 @@ func (d *DB) migrate() error {
 
 	// Ensure new columns exist on legacy tables if migrated earlier
 	optionalColumns := []struct {
+		table string
 		col   string
 		cType string
 	}{
-		{"file_type", "TEXT DEFAULT 'csv'"},
-		{"parquet_path", "TEXT DEFAULT ''"},
-		{"columns_count", "INTEGER DEFAULT 0"},
-		{"schema_json", "TEXT DEFAULT '[]'"},
-		{"preview_json", "TEXT DEFAULT '[]'"},
-		{"error_message", "TEXT DEFAULT ''"},
+		{"datasets", "file_type", "TEXT DEFAULT 'csv'"},
+		{"datasets", "parquet_path", "TEXT DEFAULT ''"},
+		{"datasets", "columns_count", "INTEGER DEFAULT 0"},
+		{"datasets", "schema_json", "TEXT DEFAULT '[]'"},
+		{"datasets", "preview_json", "TEXT DEFAULT '[]'"},
+		{"datasets", "error_message", "TEXT DEFAULT ''"},
+		{"snowflake_configs", "password", "TEXT DEFAULT ''"},
 	}
 
 	for _, oc := range optionalColumns {
-		alterQuery := fmt.Sprintf("ALTER TABLE datasets ADD COLUMN %s %s;", oc.col, oc.cType)
+		alterQuery := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s;", oc.table, oc.col, oc.cType)
 		_, _ = d.Exec(alterQuery) // Ignore if column already exists
 	}
 
@@ -421,22 +426,21 @@ func (d *DB) seedDemoData() error {
 	orgID := "org-default-001"
 	now := time.Now()
 
-	// Wipe any lingering mock data from snowflake configs
-	d.Exec("DELETE FROM snowflake_configs")
+	// Removed snowflake_configs wipe to persist user credentials.
 
 
 	// 1. Seed Main Demo Organization
 	if d.Driver == "postgres" {
 		_, _ = d.Exec(`
-			INSERT INTO organizations (id, name, slug, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5)
-			ON CONFLICT (slug) DO NOTHING
-		`, orgID, "CareData Health System", "caredata-health", now, now)
+			INSERT INTO organizations (id, name, slug, is_active, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (slug) DO UPDATE SET is_active = true
+		`, orgID, "CareData Health System", "caredata-health", true, now, now)
 	} else {
 		_, _ = d.Exec(`
-			INSERT OR IGNORE INTO organizations (id, name, slug, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?)
-		`, orgID, "CareData Health System", "caredata-health", now, now)
+			INSERT OR IGNORE INTO organizations (id, name, slug, is_active, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, orgID, "CareData Health System", "caredata-health", true, now, now)
 	}
 
 	// 2. Hash default password ("Password123!")

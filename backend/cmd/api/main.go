@@ -155,8 +155,8 @@ func main() {
 			r.Post("/datasets/upload", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(dh.Upload)).ServeHTTP)
 			r.Post("/datasets/sample", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(dh.GenerateSample)).ServeHTTP)
 
-			// Delete Dataset (Admins & Super Admins)
-			r.Delete("/datasets/{id}", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin)(http.HandlerFunc(dh.Delete)).ServeHTTP)
+			// Delete Dataset (Admins, Super Admins, Data Analysts)
+			r.Delete("/datasets/{id}", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(dh.Delete)).ServeHTTP)
 
 			// Phase 3: Data Quality, Profiling & Clinical Rules
 			r.Get("/quality/overview", qh.GetOverview)
@@ -186,7 +186,7 @@ func main() {
 			r.Post("/analytics/query", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(analyticsH.ExecuteQuery)).ServeHTTP)
 			r.Get("/analytics/snowflake/status", analyticsH.GetSnowflakeStatus)
 			r.Get("/analytics/snowflake/tables", analyticsH.GetSnowflakeTables)
-			r.Put("/analytics/snowflake/config", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin)(http.HandlerFunc(analyticsH.UpdateSnowflakeConfig)).ServeHTTP)
+			r.Put("/analytics/snowflake/config", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(analyticsH.UpdateSnowflakeConfig)).ServeHTTP)
 			r.Post("/analytics/snowflake/sync", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(analyticsH.TriggerSnowflakeSync)).ServeHTTP)
 
 			// Phase 6: Machine Learning Pipeline (Anomaly Detection & Risk Scoring)
@@ -220,6 +220,7 @@ func main() {
 			r.Post("/pipelines/run", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(pipelineH.Trigger)).ServeHTTP)
 			r.Post("/pipelines/{id}/retry", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(pipelineH.Retry)).ServeHTTP)
 			r.Post("/pipelines/{id}/cancel", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(pipelineH.Cancel)).ServeHTTP)
+			r.Delete("/pipelines/{id}", middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleOrgAdmin, domain.RoleDataAnalyst)(http.HandlerFunc(pipelineH.Delete)).ServeHTTP)
 
 			// Phase 9: Real-Time Stream Ingestion & Live HL7/FHIR MLLP Monitor
 			r.Get("/stream/stats", streamH.GetStats)

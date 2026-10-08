@@ -51,14 +51,11 @@ export const fetchSnowflakeStatus =
     return response.data;
   };
 
-export const fetchSnowflakeTables = async (): Promise<
-  Array<{ name: string; rows: string; size: string }>
-> => {
-  const response = await api.get<
-    Array<{ name: string; rows: string; size: string }>
-  >("/analytics/snowflake/tables");
+export const fetchSnowflakeTables = async (): Promise<Array<{name: string; rows: string; size: string}>> => {
+  const response = await api.get<Array<{name: string; rows: string; size: string}>>("/analytics/snowflake/tables");
   return response.data;
 };
+
 
 export const updateSnowflakeConfig = async (
   config: Partial<SnowflakeConfig>,
@@ -72,11 +69,13 @@ export const updateSnowflakeConfig = async (
 
 export const triggerSnowflakeSync = async (
   datasetId?: string,
+  tableName?: string,
 ): Promise<SnowflakeSyncRecord> => {
   const response = await api.post<SnowflakeSyncRecord>(
     "/analytics/snowflake/sync",
     {
       datasetId,
+      tableName,
     },
   );
   return response.data;

@@ -41,6 +41,30 @@ class ModelRegistry:
                 mlflow.sklearn.log_model(model, "model", registered_model_name=model_name)
                 
             run_id = mlflow.active_run().info.run_id
+
+            # Enforce MLFlow Promotion Gates (Phase 4.2)
+            auc = metrics.get("auc_roc", 0.0)
+            client = mlflow.tracking.MlflowClient()
+            
+            # Find the registered model version for this run
+            versions = client.search_model_versions(f"run_id='{run_id}'")
+            if versions:
+                version = versions[0].version
+                if auc < 0.70:
+                    logger.warning(f"AUC {auc:.3f} < 0.70. Archiving model {model_name} version {version}.")
+                    client.transition_model_version_stage(
+                        name=model_name,
+                        version=version,
+                        stage="Archived"
+                    )
+                else:
+                    logger.info(f"AUC {auc:.3f} >= 0.70. Promoting model {model_name} version {version} to Production.")
+                    client.transition_model_version_stage(
+                        name=model_name,
+                        version=version,
+                        stage="Production"
+                    )
+
             logger.info(f"Successfully logged run {run_id} to MLflow experiment '{experiment_name}'.")
             return run_id
 

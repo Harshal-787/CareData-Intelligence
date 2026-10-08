@@ -84,7 +84,7 @@ class HealthcareOLAPEngine:
                 SELECT 
                     COUNT(*) as total_encounters,
                     COUNT(DISTINCT patient_id) as active_patients,
-                    COUNT(DISTINCT provider_id) as unique_providers,
+                    COUNT(DISTINCT provider_npi) as unique_providers,
                     AVG(TRY_CAST(length_of_stay AS DOUBLE)) as avg_los,
                     AVG(CASE WHEN readmitted = 'true' OR readmission_30d = 1 THEN 1.0 ELSE 0.0 END) * 100 as readmission_rate,
                     SUM(TRY_CAST(billing_amount AS DOUBLE)) as total_cost

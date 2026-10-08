@@ -43,6 +43,10 @@ func (s *PipelineService) GetPipelineByID(id string) (*domain.PipelineJob, error
 	return s.pipelineRepo.GetJobByID(id)
 }
 
+func (s *PipelineService) DeletePipeline(id string) error {
+	return s.pipelineRepo.DeleteJob(id)
+}
+
 func (s *PipelineService) GetStats() *domain.PipelineStats {
 	return s.pipelineRepo.GetStats()
 }

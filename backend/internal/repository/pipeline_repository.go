@@ -60,6 +60,14 @@ func (r *PipelineRepository) GetJobByID(id string) (*domain.PipelineJob, error) 
 	return job, nil
 }
 
+func (r *PipelineRepository) DeleteJob(id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.jobs, id)
+	delete(r.logs, id)
+	return nil
+}
+
 func (r *PipelineRepository) ListJobs(params domain.PipelineFilterParams) ([]domain.PipelineJob, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
