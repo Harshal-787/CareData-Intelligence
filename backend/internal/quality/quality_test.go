@@ -1,7 +1,6 @@
 package quality
 
 import (
-	"io"
 	"testing"
 
 	"caredata/backend/internal/domain"
@@ -49,20 +48,7 @@ func TestICD10Regex(t *testing.T) {
 	}
 }
 
-type mockIterator struct {
-	rows []map[string]interface{}
-	idx  int
-}
-
-func (m *mockIterator) Next() (map[string]interface{}, error) {
-	if m.idx >= len(m.rows) {
-		return nil, io.EOF
-	}
-	res := m.rows[m.idx]
-	m.idx++
-	return res, nil
-}
-func (m *mockIterator) Close() error { return nil }
+// Removed mockIterator in favor of integration database testing (Phase 4.2)
 
 func TestProfileDataset(t *testing.T) {
 	schema := []domain.DatasetColumn{
@@ -78,7 +64,14 @@ func TestProfileDataset(t *testing.T) {
 		{"patient_id": "P004", "age": nil, "systolic_bp": 135.0},
 	}
 
-	profiles := ProfileDataset(schema, &mockIterator{rows: rows})
+	db, iter, err := setupTestDB("test_profile_ds", schema, rows)
+	if err != nil {
+		t.Fatalf("failed to setup test db: %v", err)
+	}
+	defer db.Close()
+	defer iter.Close()
+
+	profiles := ProfileDataset(schema, iter)
 	if len(profiles) != 3 {
 		t.Fatalf("expected 3 column profiles, got %d", len(profiles))
 	}
@@ -129,7 +122,14 @@ func TestEvaluateQualityAndRules(t *testing.T) {
 		},
 	}
 
-	res := EvaluateQualityAndRules("ds-1", "org-1", schema, &mockIterator{rows: rows}, rules)
+	db, iter, err := setupTestDB("test_eval_ds", schema, rows)
+	if err != nil {
+		t.Fatalf("failed to setup test db: %v", err)
+	}
+	defer db.Close()
+	defer iter.Close()
+
+	res := EvaluateQualityAndRules("ds-1", "org-1", schema, iter, rules)
 	if len(res.Violations) != 2 {
 		t.Fatalf("expected 2 violations, got %d", len(res.Violations))
 	}

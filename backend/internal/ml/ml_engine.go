@@ -1,14 +1,16 @@
 package ml
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
+	"log"
 	"os"
 	"time"
 
 	"caredata/backend/internal/domain"
+	"github.com/go-redis/redis/v8"
+	"github.com/google/uuid"
 )
 
 type MLEngine struct{}
@@ -29,7 +31,24 @@ func (e *MLEngine) RunPipeline(datasetID, datasetName, orgID, objectName string,
 		return nil, nil, nil, fmt.Errorf("object_name (storage path) is required to run ML pipeline")
 	}
 
+	redisHost := os.Getenv("REDIS_HOST")
+	if redisHost == "" {
+		redisHost = "localhost"
+	}
+	redisPort := os.Getenv("REDIS_PORT")
+	if redisPort == "" {
+		redisPort = "6379"
+	}
+	
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%s", redisHost, redisPort),
+	})
+	defer rdb.Close()
+	
+	jobID := "ml-job-" + uuid.New().String()[:8]
+
 	payload := map[string]interface{}{
+		"job_id":        jobID,
 		"bucket":        "raw-data",
 		"object_name":   objectName,
 		"contamination": contamination,
@@ -38,22 +57,40 @@ func (e *MLEngine) RunPipeline(datasetID, datasetName, orgID, objectName string,
 	
 	payloadBytes, _ := json.Marshal(payload)
 	
-	dataEngineURL := os.Getenv("DATA_ENGINE_URL")
-	if dataEngineURL == "" {
-		dataEngineURL = "http://localhost:8000"
-	}
-	
-	httpResp, err := http.Post(fmt.Sprintf("%s/api/v1/ml/run", dataEngineURL), "application/json", bytes.NewBuffer(payloadBytes))
+	// Enqueue to Redis
+	err := rdb.LPush(context.Background(), "ml_jobs", payloadBytes).Err()
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to reach python data engine: %w", err)
-	}
-	defer httpResp.Body.Close()
-	
-	if httpResp.StatusCode != 200 {
-		return nil, nil, nil, fmt.Errorf("data engine returned status %d", httpResp.StatusCode)
+		err = fmt.Errorf("failed to enqueue ml job to redis: %w", err)
+		log.Printf("ML Pipeline Error: %v", err)
+		return nil, nil, nil, err
 	}
 	
+	// Poll for result
+	var resBytes []byte
+	maxAttempts := 120 // 120 * 2s = 240 seconds
+	for i := 0; i < maxAttempts; i++ {
+		resStr, err := rdb.Get(context.Background(), "ml_result:"+jobID).Result()
+		if err == redis.Nil {
+			time.Sleep(2 * time.Second)
+			continue
+		} else if err != nil {
+			err = fmt.Errorf("redis error while waiting for result: %w", err)
+			log.Printf("ML Pipeline Error: %v", err)
+			return nil, nil, nil, err
+		}
+		
+		resBytes = []byte(resStr)
+		break
+	}
+	
+	if len(resBytes) == 0 {
+		err = fmt.Errorf("timed out waiting for ML worker to process job %s", jobID)
+		log.Printf("ML Pipeline Error: %v", err)
+		return nil, nil, nil, err
+	}
+
 	var res struct {
+		Error    string `json:"error"`
 		ModelRun struct {
 			ID                 string                       `json:"id"`
 			ModelName          string                       `json:"modelName"`
@@ -68,6 +105,7 @@ func (e *MLEngine) RunPipeline(datasetID, datasetName, orgID, objectName string,
 			TotalRecords       int64                        `json:"totalRecords"`
 			Hyperparameters    map[string]interface{}       `json:"hyperparameters"`
 			FeatureImportances []domain.MLFeatureImportance `json:"featureImportances"`
+			DriftReport        map[string]interface{}       `json:"driftReport"`
 		} `json:"modelRun"`
 		Anomalies []struct {
 			ID               string                   `json:"id"`
@@ -102,8 +140,16 @@ func (e *MLEngine) RunPipeline(datasetID, datasetName, orgID, objectName string,
 		} `json:"riskScores"`
 	}
 	
-	if err := json.NewDecoder(httpResp.Body).Decode(&res); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to parse data engine response: %w", err)
+	if err := json.Unmarshal(resBytes, &res); err != nil {
+		err = fmt.Errorf("failed to parse data engine response: %w", err)
+		log.Printf("ML Pipeline Error: %v", err)
+		return nil, nil, nil, err
+	}
+
+	if res.Error != "" {
+		err = fmt.Errorf("ML pipeline failed: %s", res.Error)
+		log.Printf("ML Pipeline Error: %v", err)
+		return nil, nil, nil, err
 	}
 	
 	runID := fmt.Sprintf("run-%d", time.Now().UnixNano())
@@ -175,6 +221,7 @@ func (e *MLEngine) RunPipeline(datasetID, datasetName, orgID, objectName string,
 		TotalRecords:       res.ModelRun.TotalRecords,
 		Hyperparameters:    res.ModelRun.Hyperparameters,
 		FeatureImportances: res.ModelRun.FeatureImportances,
+		DriftReport:        res.ModelRun.DriftReport,
 		CreatedAt:          now,
 		CompletedAt:        &now,
 	}

@@ -1384,10 +1384,10 @@ func (r *Repository) GetDatasetsForAnalytics(orgID, datasetID string) ([]domain.
 }
 
 func (r *Repository) GetSnowflakeConfig(orgID string) (*domain.SnowflakeConfig, error) {
-	query := `SELECT id, organization_id, account, warehouse, database_name, schema_name, role_name, username, is_connected, auto_sync, sync_interval, last_sync_at, last_sync_status, updated_at
+	query := `SELECT id, organization_id, account, warehouse, database_name, schema_name, role_name, username, password, is_connected, auto_sync, sync_interval, last_sync_at, last_sync_status, updated_at
 		FROM snowflake_configs WHERE organization_id = $1`
 	if r.db.Driver == "sqlite3" {
-		query = `SELECT id, organization_id, account, warehouse, database_name, schema_name, role_name, username, is_connected, auto_sync, sync_interval, last_sync_at, last_sync_status, updated_at
+		query = `SELECT id, organization_id, account, warehouse, database_name, schema_name, role_name, username, password, is_connected, auto_sync, sync_interval, last_sync_at, last_sync_status, updated_at
 			FROM snowflake_configs WHERE organization_id = ?`
 	}
 
@@ -1397,7 +1397,7 @@ func (r *Repository) GetSnowflakeConfig(orgID string) (*domain.SnowflakeConfig, 
 
 	err := row.Scan(
 		&cfg.ID, &cfg.OrganizationID, &cfg.Account, &cfg.Warehouse, &cfg.Database, &cfg.Schema,
-		&cfg.Role, &cfg.Username, &cfg.IsConnected, &cfg.AutoSync, &cfg.SyncInterval,
+		&cfg.Role, &cfg.Username, &cfg.Password, &cfg.IsConnected, &cfg.AutoSync, &cfg.SyncInterval,
 		&lastSyncAt, &cfg.LastSyncStatus, &cfg.UpdatedAt,
 	)
 	if err != nil {
@@ -1430,9 +1430,9 @@ func (r *Repository) GetSnowflakeConfig(orgID string) (*domain.SnowflakeConfig, 
 
 func (r *Repository) SaveSnowflakeConfig(cfg *domain.SnowflakeConfig) error {
 	query := `INSERT INTO snowflake_configs (
-		id, organization_id, account, warehouse, database_name, schema_name, role_name, username,
+		id, organization_id, account, warehouse, database_name, schema_name, role_name, username, password,
 		is_connected, auto_sync, sync_interval, last_sync_at, last_sync_status, updated_at
-	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	ON CONFLICT (organization_id) DO UPDATE SET
 		account = EXCLUDED.account,
 		warehouse = EXCLUDED.warehouse,
@@ -1440,6 +1440,7 @@ func (r *Repository) SaveSnowflakeConfig(cfg *domain.SnowflakeConfig) error {
 		schema_name = EXCLUDED.schema_name,
 		role_name = EXCLUDED.role_name,
 		username = EXCLUDED.username,
+		password = EXCLUDED.password,
 		is_connected = EXCLUDED.is_connected,
 		auto_sync = EXCLUDED.auto_sync,
 		sync_interval = EXCLUDED.sync_interval,
@@ -1449,9 +1450,9 @@ func (r *Repository) SaveSnowflakeConfig(cfg *domain.SnowflakeConfig) error {
 
 	if r.db.Driver == "sqlite3" {
 		query = `INSERT INTO snowflake_configs (
-			id, organization_id, account, warehouse, database_name, schema_name, role_name, username,
+			id, organization_id, account, warehouse, database_name, schema_name, role_name, username, password,
 			is_connected, auto_sync, sync_interval, last_sync_at, last_sync_status, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (organization_id) DO UPDATE SET
 			account = excluded.account,
 			warehouse = excluded.warehouse,
@@ -1459,6 +1460,7 @@ func (r *Repository) SaveSnowflakeConfig(cfg *domain.SnowflakeConfig) error {
 			schema_name = excluded.schema_name,
 			role_name = excluded.role_name,
 			username = excluded.username,
+			password = excluded.password,
 			is_connected = excluded.is_connected,
 			auto_sync = excluded.auto_sync,
 			sync_interval = excluded.sync_interval,
@@ -1470,7 +1472,7 @@ func (r *Repository) SaveSnowflakeConfig(cfg *domain.SnowflakeConfig) error {
 	cfg.UpdatedAt = time.Now()
 	_, err := r.db.Exec(query,
 		cfg.ID, cfg.OrganizationID, cfg.Account, cfg.Warehouse, cfg.Database, cfg.Schema,
-		cfg.Role, cfg.Username, cfg.IsConnected, cfg.AutoSync, cfg.SyncInterval,
+		cfg.Role, cfg.Username, cfg.Password, cfg.IsConnected, cfg.AutoSync, cfg.SyncInterval,
 		cfg.LastSyncAt, cfg.LastSyncStatus, cfg.UpdatedAt,
 	)
 	return err
@@ -1557,26 +1559,27 @@ func (r *Repository) ListSnowflakeSyncLogs(orgID string, limit int) ([]domain.Sn
 func (r *Repository) SaveMLModelRun(run *domain.MLModelRun) error {
 	hyperJSON, _ := json.Marshal(run.Hyperparameters)
 	featJSON, _ := json.Marshal(run.FeatureImportances)
+	driftJSON, _ := json.Marshal(run.DriftReport)
 
 	query := `INSERT INTO ml_model_runs (
 		id, organization_id, dataset_id, dataset_name, model_name, model_type, status,
 		accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records,
-		hyperparameters_json, feature_importances_json, error_message, created_at, completed_at
-	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`
+		hyperparameters_json, feature_importances_json, drift_report_json, error_message, created_at, completed_at
+	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`
 
 	if r.db.Driver == "sqlite3" {
 		query = `INSERT INTO ml_model_runs (
 			id, organization_id, dataset_id, dataset_name, model_name, model_type, status,
 			accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records,
-			hyperparameters_json, feature_importances_json, error_message, created_at, completed_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			hyperparameters_json, feature_importances_json, drift_report_json, error_message, created_at, completed_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	}
 
 	_, err := r.db.Exec(
 		query,
 		run.ID, run.OrganizationID, run.DatasetID, run.DatasetName, run.ModelName, run.ModelType, string(run.Status),
 		run.Accuracy, run.F1Score, run.AucRoc, run.Contamination, run.NEstimators, run.AnomalyCount, run.TotalRecords,
-		string(hyperJSON), string(featJSON), run.ErrorMessage, run.CreatedAt, run.CompletedAt,
+		string(hyperJSON), string(featJSON), string(driftJSON), run.ErrorMessage, run.CreatedAt, run.CompletedAt,
 	)
 	return err
 }
@@ -1586,29 +1589,29 @@ func (r *Repository) GetLatestMLModelRun(orgID, datasetID string) (*domain.MLMod
 	var args []interface{}
 
 	if datasetID != "" {
-		query = "SELECT id, organization_id, dataset_id, dataset_name, model_name, model_type, status, accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records, hyperparameters_json, feature_importances_json, error_message, created_at, completed_at FROM ml_model_runs WHERE dataset_id = $1 ORDER BY created_at DESC LIMIT 1"
+		query = "SELECT id, organization_id, dataset_id, dataset_name, model_name, model_type, status, accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records, hyperparameters_json, feature_importances_json, drift_report_json, error_message, created_at, completed_at FROM ml_model_runs WHERE dataset_id = $1 ORDER BY created_at DESC LIMIT 1"
 		if r.db.Driver == "sqlite3" {
-			query = "SELECT id, organization_id, dataset_id, dataset_name, model_name, model_type, status, accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records, hyperparameters_json, feature_importances_json, error_message, created_at, completed_at FROM ml_model_runs WHERE dataset_id = ? ORDER BY created_at DESC LIMIT 1"
+			query = "SELECT id, organization_id, dataset_id, dataset_name, model_name, model_type, status, accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records, hyperparameters_json, feature_importances_json, drift_report_json, error_message, created_at, completed_at FROM ml_model_runs WHERE dataset_id = ? ORDER BY created_at DESC LIMIT 1"
 		}
 		args = []interface{}{datasetID}
 	} else if orgID != "" {
-		query = "SELECT id, organization_id, dataset_id, dataset_name, model_name, model_type, status, accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records, hyperparameters_json, feature_importances_json, error_message, created_at, completed_at FROM ml_model_runs WHERE organization_id = $1 OR organization_id = '' ORDER BY created_at DESC LIMIT 1"
+		query = "SELECT id, organization_id, dataset_id, dataset_name, model_name, model_type, status, accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records, hyperparameters_json, feature_importances_json, drift_report_json, error_message, created_at, completed_at FROM ml_model_runs WHERE organization_id = $1 OR organization_id = '' ORDER BY created_at DESC LIMIT 1"
 		if r.db.Driver == "sqlite3" {
-			query = "SELECT id, organization_id, dataset_id, dataset_name, model_name, model_type, status, accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records, hyperparameters_json, feature_importances_json, error_message, created_at, completed_at FROM ml_model_runs WHERE organization_id = ? OR organization_id = '' ORDER BY created_at DESC LIMIT 1"
+			query = "SELECT id, organization_id, dataset_id, dataset_name, model_name, model_type, status, accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records, hyperparameters_json, feature_importances_json, drift_report_json, error_message, created_at, completed_at FROM ml_model_runs WHERE organization_id = ? OR organization_id = '' ORDER BY created_at DESC LIMIT 1"
 		}
 		args = []interface{}{orgID}
 	} else {
-		query = "SELECT id, organization_id, dataset_id, dataset_name, model_name, model_type, status, accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records, hyperparameters_json, feature_importances_json, error_message, created_at, completed_at FROM ml_model_runs ORDER BY created_at DESC LIMIT 1"
+		query = "SELECT id, organization_id, dataset_id, dataset_name, model_name, model_type, status, accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records, hyperparameters_json, feature_importances_json, drift_report_json, error_message, created_at, completed_at FROM ml_model_runs ORDER BY created_at DESC LIMIT 1"
 	}
 
 	row := r.db.QueryRow(query, args...)
 	var run domain.MLModelRun
-	var hyperJSON, featJSON, statusStr string
+	var hyperJSON, featJSON, driftJSON, statusStr string
 
 	err := row.Scan(
 		&run.ID, &run.OrganizationID, &run.DatasetID, &run.DatasetName, &run.ModelName, &run.ModelType, &statusStr,
 		&run.Accuracy, &run.F1Score, &run.AucRoc, &run.Contamination, &run.NEstimators, &run.AnomalyCount, &run.TotalRecords,
-		&hyperJSON, &featJSON, &run.ErrorMessage, &run.CreatedAt, &run.CompletedAt,
+		&hyperJSON, &featJSON, &driftJSON, &run.ErrorMessage, &run.CreatedAt, &run.CompletedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -1620,6 +1623,7 @@ func (r *Repository) GetLatestMLModelRun(orgID, datasetID string) (*domain.MLMod
 	run.Status = domain.MLModelStatus(statusStr)
 	_ = json.Unmarshal([]byte(hyperJSON), &run.Hyperparameters)
 	_ = json.Unmarshal([]byte(featJSON), &run.FeatureImportances)
+	_ = json.Unmarshal([]byte(driftJSON), &run.DriftReport)
 	return &run, nil
 }
 
@@ -1628,13 +1632,13 @@ func (r *Repository) ListMLModelRuns(orgID string) ([]domain.MLModelRun, error) 
 	var args []interface{}
 
 	if orgID != "" {
-		query = "SELECT id, organization_id, dataset_id, dataset_name, model_name, model_type, status, accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records, hyperparameters_json, feature_importances_json, error_message, created_at, completed_at FROM ml_model_runs WHERE organization_id = $1 OR organization_id = '' ORDER BY created_at DESC"
+		query = "SELECT id, organization_id, dataset_id, dataset_name, model_name, model_type, status, accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records, hyperparameters_json, feature_importances_json, drift_report_json, error_message, created_at, completed_at FROM ml_model_runs WHERE organization_id = $1 OR organization_id = '' ORDER BY created_at DESC"
 		if r.db.Driver == "sqlite3" {
-			query = "SELECT id, organization_id, dataset_id, dataset_name, model_name, model_type, status, accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records, hyperparameters_json, feature_importances_json, error_message, created_at, completed_at FROM ml_model_runs WHERE organization_id = ? OR organization_id = '' ORDER BY created_at DESC"
+			query = "SELECT id, organization_id, dataset_id, dataset_name, model_name, model_type, status, accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records, hyperparameters_json, feature_importances_json, drift_report_json, error_message, created_at, completed_at FROM ml_model_runs WHERE organization_id = ? OR organization_id = '' ORDER BY created_at DESC"
 		}
 		args = []interface{}{orgID}
 	} else {
-		query = "SELECT id, organization_id, dataset_id, dataset_name, model_name, model_type, status, accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records, hyperparameters_json, feature_importances_json, error_message, created_at, completed_at FROM ml_model_runs ORDER BY created_at DESC"
+		query = "SELECT id, organization_id, dataset_id, dataset_name, model_name, model_type, status, accuracy, f1_score, auc_roc, contamination, n_estimators, anomaly_count, total_records, hyperparameters_json, feature_importances_json, drift_report_json, error_message, created_at, completed_at FROM ml_model_runs ORDER BY created_at DESC"
 	}
 
 	rows, err := r.db.Query(query, args...)
@@ -1646,17 +1650,18 @@ func (r *Repository) ListMLModelRuns(orgID string) ([]domain.MLModelRun, error) 
 	var runs []domain.MLModelRun
 	for rows.Next() {
 		var run domain.MLModelRun
-		var hyperJSON, featJSON, statusStr string
+		var hyperJSON, featJSON, driftJSON, statusStr string
 		if err := rows.Scan(
 			&run.ID, &run.OrganizationID, &run.DatasetID, &run.DatasetName, &run.ModelName, &run.ModelType, &statusStr,
 			&run.Accuracy, &run.F1Score, &run.AucRoc, &run.Contamination, &run.NEstimators, &run.AnomalyCount, &run.TotalRecords,
-			&hyperJSON, &featJSON, &run.ErrorMessage, &run.CreatedAt, &run.CompletedAt,
+			&hyperJSON, &featJSON, &driftJSON, &run.ErrorMessage, &run.CreatedAt, &run.CompletedAt,
 		); err != nil {
 			return nil, err
 		}
 		run.Status = domain.MLModelStatus(statusStr)
 		_ = json.Unmarshal([]byte(hyperJSON), &run.Hyperparameters)
 		_ = json.Unmarshal([]byte(featJSON), &run.FeatureImportances)
+		_ = json.Unmarshal([]byte(driftJSON), &run.DriftReport)
 		runs = append(runs, run)
 	}
 

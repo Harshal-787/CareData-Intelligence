@@ -175,10 +175,11 @@ func (h *AnalyticsHandler) TriggerSnowflakeSync(w http.ResponseWriter, r *http.R
 
 	var body struct {
 		DatasetID string `json:"datasetId"`
+		TableName string `json:"tableName"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 
-	syncRecord, err := h.analyticsService.TriggerSnowflakeSync(claims.OrganizationID, claims.Email, body.DatasetID)
+	syncRecord, err := h.analyticsService.TriggerSnowflakeSync(claims.OrganizationID, claims.Email, body.DatasetID, body.TableName)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return

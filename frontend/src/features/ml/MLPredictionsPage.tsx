@@ -236,7 +236,7 @@ export const MLPredictionsPage: React.FC = () => {
         if (activeTab === 'models') loadModels();
       }, 1500);
     } catch (err: any) {
-      alert('Training failed: ' + (err.response?.data?.message || err.message));
+      alert('Training failed: ' + (err.response?.data?.error || err.response?.data?.message || err.message));
       // Reload on failure to restore state
       loadOverview();
       loadRiskScores();
@@ -896,6 +896,73 @@ export const MLPredictionsPage: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Evidently AI Data Drift Report Card */}
+          {models[0]?.driftReport && (
+            <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-4">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <Database className="w-5 h-5 text-indigo-600" />
+                    Evidently AI Data Drift Monitor
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Real-time statistical drift detection comparing the active production dataset against the training baseline.
+                  </p>
+                </div>
+                <div className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${models[0].driftReport.tests_passed ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+                  {models[0].driftReport.tests_passed ? 'All Checks Passed' : 'Drift Detected - Review Required'}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2">
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                  <span className="text-[11px] text-slate-500 font-semibold">Dataset Drift Status</span>
+                  <div className={`text-sm font-bold mt-1 ${models[0].driftReport.dataset_drift_detected ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    {models[0].driftReport.dataset_drift_detected ? 'Drift Detected' : 'No Drift'}
+                  </div>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                  <span className="text-[11px] text-slate-500 font-semibold">Drifted Features</span>
+                  <div className="text-sm font-bold text-slate-900 mt-1">
+                    {models[0].driftReport.drifted_features_count} / {models[0].driftReport.total_features}
+                  </div>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                  <span className="text-[11px] text-slate-500 font-semibold">Drift Share</span>
+                  <div className="text-sm font-bold text-slate-900 mt-1">
+                    {(models[0].driftReport.drift_share * 100).toFixed(1)}%
+                  </div>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                  <span className="text-[11px] text-slate-500 font-semibold">Automated Test Suite</span>
+                  <div className={`text-sm font-bold mt-1 ${models[0].driftReport.tests_passed ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {models[0].driftReport.tests_passed ? 'Passed' : 'Failed'}
+                  </div>
+                </div>
+              </div>
+
+              {models[0].driftReport.feature_details && models[0].driftReport.feature_details.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-slate-100">
+                  <h4 className="text-xs font-bold text-slate-900 mb-3">Feature-Level Statistical Tests</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {models[0].driftReport.feature_details.map((feat, idx) => (
+                      <div key={idx} className="bg-white border border-rose-100 rounded-xl p-3 shadow-sm">
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="font-mono text-xs font-bold text-slate-800 break-all">{feat.feature}</span>
+                          <span className="px-2 py-0.5 bg-rose-50 text-rose-600 rounded text-[10px] font-bold border border-rose-100">Drifted</span>
+                        </div>
+                        <div className="flex justify-between items-end">
+                          <span className="text-[10px] text-slate-400 font-mono">Test: {feat.stat_test}</span>
+                          <span className="text-xs font-bold text-rose-600">Score: {feat.drift_score.toFixed(4)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Model Runs History Table */}
           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm space-y-4 p-5">

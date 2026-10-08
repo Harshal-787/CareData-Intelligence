@@ -328,7 +328,7 @@ export const AnalyticsPage: React.FC = () => {
               </div>
               <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600">
                 <TrendingUp className="w-3.5 h-3.5" />
-                <span>+4.8% vs last period</span>
+                <span>{kpis?.encountersGrowthPct !== undefined ? `${kpis.encountersGrowthPct > 0 ? '+' : ''}${kpis.encountersGrowthPct.toFixed(1)}% vs last period` : '0% vs last period'}</span>
               </div>
             </div>
 
@@ -343,7 +343,7 @@ export const AnalyticsPage: React.FC = () => {
               </div>
               <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>-0.3 days optimal</span>
+                <span>{kpis?.losDeltaDays !== undefined ? `${kpis.losDeltaDays > 0 ? '+' : ''}${kpis.losDeltaDays.toFixed(1)} days delta` : '0 days delta'}</span>
               </div>
             </div>
 
@@ -357,7 +357,7 @@ export const AnalyticsPage: React.FC = () => {
                 {kpis?.readmissionRatePct ? `${kpis.readmissionRatePct}%` : 'N/A'}
               </div>
               <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600">
-                <span>1.4% below benchmark</span>
+                <span>{kpis?.readmissionDeltaPct !== undefined ? `${kpis.readmissionDeltaPct > 0 ? '+' : ''}${kpis.readmissionDeltaPct.toFixed(1)}% vs benchmark` : '0% vs benchmark'}</span>
               </div>
             </div>
 
@@ -385,7 +385,7 @@ export const AnalyticsPage: React.FC = () => {
                 {kpis?.emergencyRatioPct ? `${kpis.emergencyRatioPct}%` : 'N/A'}
               </div>
               <div className="mt-2 text-xs text-amber-600">
-                <span>Triage acuity: Moderate</span>
+                <span>Triage acuity: {kpis?.emergencyRatioPct ? (kpis.emergencyRatioPct > 30 ? 'High' : 'Moderate') : 'N/A'}</span>
               </div>
             </div>
 

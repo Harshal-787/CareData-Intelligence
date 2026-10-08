@@ -45,6 +45,18 @@ export interface MLModelRun {
   errorMessage?: string;
   createdAt: string;
   completedAt?: string;
+  driftReport?: {
+    dataset_drift_detected: boolean;
+    drifted_features_count: number;
+    total_features: number;
+    drift_share: number;
+    tests_passed: boolean;
+    feature_details: Array<{
+      feature: string;
+      drift_score: number;
+      stat_test: string;
+    }>;
+  };
 }
 
 export interface MLAnomaly {

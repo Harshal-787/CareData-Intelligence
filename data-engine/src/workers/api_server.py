@@ -296,5 +296,6 @@ def generate_report(req: InsightRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    port = 8000
+    import os
+    port = int(os.getenv("PORT", 8001))
     uvicorn.run(app, host="0.0.0.0", port=port)

@@ -212,7 +212,7 @@ export const DatasetsPage: React.FC = () => {
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-200 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-indigo-600"
           >
             <Database className="size-3.5" />
-            <span>Import Snowflake</span>
+            <span>Extract from Snowflake</span>
           </button>
 
           {/* Upload Button */}
@@ -377,7 +377,7 @@ export const DatasetsPage: React.FC = () => {
                 onClick={() => setIsSnowflakeModalOpen(true)}
                 className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-blue-600 hover:bg-slate-50 transition flex items-center gap-1.5"
               >
-                <Database className="size-3.5" /> Import Snowflake
+                <Database className="size-3.5" /> Sync Snowflake
               </button>
             </div>
           </div>
@@ -523,6 +523,7 @@ export const DatasetsPage: React.FC = () => {
       <SnowflakeImportModal
         isOpen={isSnowflakeModalOpen}
         onClose={() => setIsSnowflakeModalOpen(false)}
+        onSuccess={() => loadData()}
       />
 
       {/* Dataset Detail Drawer */}

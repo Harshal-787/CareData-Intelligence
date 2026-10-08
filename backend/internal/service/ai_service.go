@@ -126,7 +126,7 @@ func (s *AIService) AskQuestion(userID, orgID string, req domain.AIChatRequest) 
 	
 	dataEngineURL := os.Getenv("DATA_ENGINE_URL")
 	if dataEngineURL == "" {
-		dataEngineURL = "http://localhost:8000"
+		dataEngineURL = "http://localhost:8001"
 	}
 	
 	var asstContent string
@@ -263,7 +263,7 @@ func (s *AIService) GenerateNarrative(orgID, datasetID string) (*domain.AINarrat
 
 	dataEngineURL := os.Getenv("DATA_ENGINE_URL")
 	if dataEngineURL == "" {
-		dataEngineURL = "http://localhost:8000"
+		dataEngineURL = "http://localhost:8001"
 	}
 
 	modelName := "gemini-3.6-flash"
@@ -320,7 +320,7 @@ func (s *AIService) GenerateReport(userID, orgID string, req domain.AIReportRequ
 
 	dataEngineURL := os.Getenv("DATA_ENGINE_URL")
 	if dataEngineURL == "" {
-		dataEngineURL = "http://localhost:8000"
+		dataEngineURL = "http://localhost:8001"
 	}
 
 	modelName := "gemini-3.6-flash"

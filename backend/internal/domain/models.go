@@ -708,6 +708,7 @@ type MLModelRun struct {
 	TotalRecords       int64                  `json:"totalRecords"`
 	Hyperparameters    map[string]interface{} `json:"hyperparameters"`
 	FeatureImportances []MLFeatureImportance  `json:"featureImportances"`
+	DriftReport        map[string]interface{} `json:"driftReport,omitempty"`
 	ErrorMessage       string                 `json:"errorMessage,omitempty"`
 	CreatedAt          time.Time              `json:"createdAt"`
 	CompletedAt        *time.Time             `json:"completedAt,omitempty"`
