@@ -231,7 +231,7 @@ export const AnalyticsPage: React.FC = () => {
           <select
             value={selectedDataset}
             onChange={(e) => setSelectedDataset(e.target.value)}
-            className="bg-slate-50 border border-slate-750 text-slate-700 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
+            className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
           >
             <option value="">All Ingested Datasets</option>
             {analyticsData?.availableFilterOptions?.datasets?.map((ds) => (
@@ -245,7 +245,7 @@ export const AnalyticsPage: React.FC = () => {
           <select
             value={selectedDateRange}
             onChange={(e) => setSelectedDateRange(e.target.value)}
-            className="bg-slate-50 border border-slate-750 text-slate-700 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
+            className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
           >
             <option value="all">All Historical Dates</option>
             <option value="30d">Last 30 Days</option>
@@ -257,7 +257,7 @@ export const AnalyticsPage: React.FC = () => {
           <select
             value={selectedDept}
             onChange={(e) => setSelectedDept(e.target.value)}
-            className="bg-slate-50 border border-slate-750 text-slate-700 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
+            className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
           >
             <option value="">All Clinical Departments</option>
             {analyticsData?.availableFilterOptions?.departments?.map((d) => (
@@ -271,7 +271,7 @@ export const AnalyticsPage: React.FC = () => {
           <select
             value={selectedAdmissionType}
             onChange={(e) => setSelectedAdmissionType(e.target.value)}
-            className="bg-slate-50 border border-slate-750 text-slate-700 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
+            className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
           >
             <option value="">All Admission Types</option>
             <option value="Inpatient">Inpatient</option>
