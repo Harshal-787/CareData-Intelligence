@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { X, Database, CloudUpload, Loader2, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
+import { X, Database, CloudUpload, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { fetchSnowflakeStatus, triggerSnowflakeSync, fetchSnowflakeTables } from "../../api/analyticsApi";
 import { SnowflakeConfig } from "../../types/analytics";
 

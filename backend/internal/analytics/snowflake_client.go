@@ -102,7 +102,7 @@ func (c *SnowflakeClient) ProvisionTenant(orgID string, databaseName string, sch
 
 	// 4. Removed automatic creation of clinical_encounters table
 	// We should not be modifying the user's database structure when they just connect.
-	
+
 	return nil
 }
 
@@ -322,24 +322,24 @@ func (c *SnowflakeClient) GetTables(database, schema string) ([]map[string]inter
 				m[colName] = *val
 			}
 		}
-		
+
 		// Map standard Snowflake SHOW TABLES columns to our format
 		name := ""
 		if v, ok := m["name"]; ok {
 			name = fmt.Sprintf("%v", v)
 		}
-		
+
 		rowsCount := "0"
 		if v, ok := m["rows"]; ok {
 			rowsCount = fmt.Sprintf("%v", v)
 		}
-		
+
 		sizeStr := "0 B"
 		if v, ok := m["bytes"]; ok {
 			bytes, _ := strconv.ParseInt(fmt.Sprintf("%v", v), 10, 64)
 			sizeStr = fmt.Sprintf("%d MB", bytes/1024/1024)
 		}
-		
+
 		tables = append(tables, map[string]interface{}{
 			"name": name,
 			"rows": rowsCount,

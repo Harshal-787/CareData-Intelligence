@@ -52,7 +52,7 @@ func (e *AnalyticsEngine) FormatDuckDBOverview(
 	resp := domain.AnalyticsOverviewResponse{
 		CalculatedAt: time.Now(),
 	}
-	
+
 	// Map KPIs
 	resp.KPIs = domain.ClinicalKPIOverview{
 		TotalEncounters:     getIntVal(pyResp.KPIs, "total_encounters"),
@@ -73,7 +73,7 @@ func (e *AnalyticsEngine) FormatDuckDBOverview(
 			DiagnosisName:   getStringVal(d, "diagnosis_name"),
 			Category:        lookupICDCategory(getStringVal(d, "icd10_code")),
 			PatientCount:    getIntVal(d, "count"),
-			Percentage:      math.Round((float64(getIntVal(d, "count"))/math.Max(1.0, float64(resp.KPIs.TotalEncounters))*100)*10)/10,
+			Percentage:      math.Round((float64(getIntVal(d, "count"))/math.Max(1.0, float64(resp.KPIs.TotalEncounters))*100)*10) / 10,
 			AvgLOSDays:      math.Round(getFloatVal(d, "avg_los")*10) / 10,
 			ReadmissionRate: math.Round(getFloatVal(d, "readmission_rate")*10) / 10,
 			AvgCost:         math.Round(getFloatVal(d, "avg_cost")),
@@ -85,7 +85,7 @@ func (e *AnalyticsEngine) FormatDuckDBOverview(
 		avgLos := getFloatVal(d, "avg_los")
 		count := getIntVal(d, "count")
 		occupancy := math.Min(96.5, math.Max(45.0, 65.0+(avgLos*4.2)+(float64(count%20)*1.1)))
-		
+
 		resp.Departments = append(resp.Departments, domain.DepartmentMetric{
 			Department:       getStringVal(d, "department"),
 			EncounterCount:   count,
@@ -103,27 +103,29 @@ func (e *AnalyticsEngine) FormatDuckDBOverview(
 		resp.AgeCohorts = append(resp.AgeCohorts, domain.DemographicCohort{
 			CohortLabel:  getStringVal(c, "cohort_label"),
 			PatientCount: getIntVal(c, "count"),
-			Percentage:   math.Round((float64(getIntVal(c, "count"))/math.Max(1.0, float64(resp.KPIs.TotalEncounters))*100)*10)/10,
+			Percentage:   math.Round((float64(getIntVal(c, "count"))/math.Max(1.0, float64(resp.KPIs.TotalEncounters))*100)*10) / 10,
 			AvgLOSDays:   math.Round(getFloatVal(c, "avg_los")*10) / 10,
 			TotalCost:    math.Round(getFloatVal(c, "total_cost")),
 		})
 	}
-	
+
 	// Map Payer Mix
 	for _, p := range pyResp.PayerMix {
 		resp.PayerMix = append(resp.PayerMix, domain.PayerMixDistribution{
 			PayerName:    getStringVal(p, "payer_name"),
 			PatientCount: getIntVal(p, "count"),
-			Percentage:   math.Round((float64(getIntVal(p, "count"))/math.Max(1.0, float64(resp.KPIs.TotalEncounters))*100)*10)/10,
+			Percentage:   math.Round((float64(getIntVal(p, "count"))/math.Max(1.0, float64(resp.KPIs.TotalEncounters))*100)*10) / 10,
 			TotalBilled:  math.Round(getFloatVal(p, "total_billed")),
 		})
 	}
-	
+
 	// Map Gender Breakdown
 	resp.GenderBreakdown = make(map[string]int64)
 	for _, g := range pyResp.GenderBreakdown {
 		gender := getStringVal(g, "gender")
-		if gender == "" { gender = "Unknown" }
+		if gender == "" {
+			gender = "Unknown"
+		}
 		resp.GenderBreakdown[gender] = getIntVal(g, "count")
 	}
 
@@ -139,7 +141,7 @@ func (e *AnalyticsEngine) FormatDuckDBOverview(
 			Emergency:   getIntVal(t, "emergency"),
 		})
 	}
-	
+
 	datasetSummaries := make([]domain.DatasetSummary, 0, len(datasets))
 	for _, d := range datasets {
 		datasetSummaries = append(datasetSummaries, domain.DatasetSummary{
@@ -151,6 +153,6 @@ func (e *AnalyticsEngine) FormatDuckDBOverview(
 	}
 	resp.AvailableFilterOptions.Datasets = datasetSummaries
 	resp.AvailableFilterOptions.DateRanges = []string{"30d", "90d", "1y", "all"}
-	
+
 	return resp
 }

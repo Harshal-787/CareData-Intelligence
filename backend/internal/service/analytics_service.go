@@ -18,6 +18,7 @@ import (
 	"caredata/backend/internal/quality"
 	"caredata/backend/internal/repository"
 	"caredata/backend/internal/storage"
+
 	"github.com/google/uuid"
 )
 
@@ -37,7 +38,7 @@ func NewAnalyticsService(repo *repository.Repository, store storage.Storage, cfg
 		engine:  analytics.NewAnalyticsEngine(),
 		sf:      analytics.NewSnowflakeClient(),
 	}
-	
+
 	// Recover Snowflake connection from database across restarts
 	sfCfg, err := repo.GetSnowflakeConfig("org-default-001")
 	if err == nil && sfCfg != nil && sfCfg.IsConnected && sfCfg.Password != "" {
@@ -47,7 +48,7 @@ func NewAnalyticsService(repo *repository.Repository, store storage.Storage, cfg
 			log.Printf("✓ Snowflake connection recovered from DB for org-default-001")
 		}
 	}
-	
+
 	return svc
 }
 
@@ -145,11 +146,11 @@ func (s *AnalyticsService) ExecuteQuery(orgID string, req domain.SQLQueryRequest
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch dataset for query: %w", err)
 	}
-	
+
 	if len(datasets) == 0 {
 		return nil, fmt.Errorf("no dataset found")
 	}
-	
+
 	// Assume the first dataset is the target
 	dataset := datasets[0]
 	objectName := dataset.StoragePath // Assuming this contains the MinIO object name
@@ -163,38 +164,38 @@ func (s *AnalyticsService) ExecuteQuery(orgID string, req domain.SQLQueryRequest
 
 	// Prepare payload for Python Data Engine
 	payload := map[string]interface{}{
-		"query": req.Query,
-		"bucket": "raw-data",
+		"query":       req.Query,
+		"bucket":      "raw-data",
 		"object_name": objectName,
 	}
-	
+
 	payloadBytes, _ := json.Marshal(payload)
-	
+
 	dataEngineURL := os.Getenv("DATA_ENGINE_URL")
 	if dataEngineURL == "" {
 		dataEngineURL = "http://localhost:8001"
 	}
-	
+
 	httpResp, err := http.Post(fmt.Sprintf("%s/api/v1/query", dataEngineURL), "application/json", bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to reach python data engine: %w", err)
 	}
 	defer httpResp.Body.Close()
-	
+
 	if httpResp.StatusCode != 200 {
 		return nil, fmt.Errorf("data engine returned status %d", httpResp.StatusCode)
 	}
-	
+
 	var result struct {
 		Records         []map[string]interface{} `json:"records"`
 		Count           int                      `json:"count"`
 		ExecutionTimeMs float64                  `json:"execution_time_ms"`
 	}
-	
+
 	if err := json.NewDecoder(httpResp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to parse data engine response: %w", err)
 	}
-	
+
 	// Extract columns
 	var columns []domain.SQLQueryColumn
 	if len(result.Records) > 0 {
@@ -205,14 +206,14 @@ func (s *AnalyticsService) ExecuteQuery(orgID string, req domain.SQLQueryRequest
 			})
 		}
 	}
-	
+
 	res := domain.SQLQueryResponse{
 		Columns:         columns,
 		Rows:            result.Records,
 		TotalRows:       int64(result.Count),
 		ExecutionTimeMs: result.ExecutionTimeMs,
 	}
-	
+
 	return &res, nil
 }
 
@@ -251,7 +252,7 @@ func (s *AnalyticsService) UpdateSnowflakeConfig(orgID string, cfg *domain.Snowf
 	if cfg.ID == "" {
 		cfg.ID = fmt.Sprintf("sf-%s", orgID)
 	}
-	
+
 	// If password is empty (e.g. redacted by frontend), retain the existing one
 	if cfg.Password == "" {
 		if existing, err := s.repo.GetSnowflakeConfig(orgID); err == nil && existing != nil {
@@ -270,14 +271,14 @@ func (s *AnalyticsService) UpdateSnowflakeConfig(orgID string, cfg *domain.Snowf
 			cfg.IsConnected = true
 		}
 	}
-	
+
 	return s.repo.SaveSnowflakeConfig(cfg)
 }
 
 // TriggerSnowflakeSync simulated or executes a fast batch export into the enterprise Snowflake warehouse.
 func (s *AnalyticsService) TriggerSnowflakeSync(orgID, userID, datasetID, tableName string) (*domain.SnowflakeSyncRecord, error) {
 	start := time.Now()
-	
+
 	if s.sf == nil {
 		return nil, fmt.Errorf("snowflake client not initialized")
 	}
@@ -392,7 +393,7 @@ func (s *AnalyticsService) TriggerSnowflakeSync(orgID, userID, datasetID, tableN
 					iter1 := ingest.NewMemoryIterator(pr)
 					columnProfiles := quality.ProfileDataset(sc, iter1)
 					profJSON, _ := json.Marshal(columnProfiles)
-					
+
 					iter2 := ingest.NewMemoryIterator(pr)
 					valRes := quality.EvaluateQualityAndRules(dsID, oID, sc, iter2, defaultRules)
 					reportID := fmt.Sprintf("qr-%s", uuid.New().String()[:12])
@@ -514,7 +515,7 @@ func (s *AnalyticsService) GetSnowflakeTables(orgID string) ([]map[string]interf
 
 func (s *AnalyticsService) getSnowflakeOverview(orgID string, filter domain.AnalyticsFilterParams, datasets []domain.Dataset) (*domain.AnalyticsOverviewResponse, error) {
 	var pyResp analytics.PythonOverviewResponse
-	
+
 	var wg sync.WaitGroup
 	var errs []error
 	var errMutex sync.Mutex
@@ -523,7 +524,7 @@ func (s *AnalyticsService) getSnowflakeOverview(orgID string, filter domain.Anal
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			
+
 			sfCfg, cfgErr := s.repo.GetSnowflakeConfig(orgID)
 			if cfgErr != nil || sfCfg == nil || !sfCfg.IsConnected {
 				errMutex.Lock()
@@ -531,7 +532,7 @@ func (s *AnalyticsService) getSnowflakeOverview(orgID string, filter domain.Anal
 				errMutex.Unlock()
 				return
 			}
-			
+
 			res, err := s.sf.ExecuteTenantQuery(sfCfg.Warehouse, sfCfg.Database, sfCfg.Schema, query)
 			if err != nil {
 				errMutex.Lock()
@@ -539,7 +540,7 @@ func (s *AnalyticsService) getSnowflakeOverview(orgID string, filter domain.Anal
 				errMutex.Unlock()
 				return
 			}
-			
+
 			switch v := target.(type) {
 			case *map[string]interface{}:
 				if len(res.Rows) > 0 {
