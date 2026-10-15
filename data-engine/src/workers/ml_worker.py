@@ -64,21 +64,23 @@ def process_ml_job(job_data: dict, r: redis.Redis):
         r.set(f"ml_result:{job_id}", json.dumps({"error": str(e)}), ex=3600)
 
 def main():
-    r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True, health_check_interval=30)
+    r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True, socket_timeout=30)
     logger.info(f"Connected to Redis at {REDIS_HOST}:{REDIS_PORT}. Listening for ML jobs...")
     
     queue_name = "ml_jobs"
     
     while True:
         try:
-            result = r.brpop(queue_name, timeout=0)
+            result = r.brpop(queue_name, timeout=5)
             if result:
                 _, msg = result
                 job_data = json.loads(msg)
                 process_ml_job(job_data, r)
+        except redis.exceptions.TimeoutError:
+            continue
         except Exception as e:
             logger.error(f"Error processing job: {e}")
-            time.sleep(5)
+            time.sleep(2)
 
 if __name__ == "__main__":
     main()

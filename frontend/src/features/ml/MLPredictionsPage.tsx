@@ -349,9 +349,9 @@ export const MLPredictionsPage: React.FC = () => {
                 setTrainDatasetId(selectedDataset || '');
                 setIsTrainModalOpen(true);
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-900 shadow-sm shadow-cyan-600/20 text-xs font-semibold rounded-2xl transition"
+              className="btn-primary"
             >
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className="w-3.5 h-3.5" />
               Train / Run Pipeline
             </button>
           </div>
@@ -1296,7 +1296,7 @@ export const MLPredictionsPage: React.FC = () => {
               <button
                 onClick={handleTriggerTraining}
                 disabled={isTraining}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-semibold rounded-2xl shadow-sm shadow-cyan-600/25 transition disabled:opacity-50"
+                className="btn-primary"
               >
                 {isTraining ? (
                   <>

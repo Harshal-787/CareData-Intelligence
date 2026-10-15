@@ -14,6 +14,7 @@ import { fetchAIReports, generateAIReport } from '../../api/aiApi';
 import { fetchDatasets } from '../../api/datasets';
 import { AIClinicalReport } from '../../types/ai';
 import { Dataset } from '../../types/dataset';
+import { ClinicalMessageRenderer } from '../ai/ClinicalMessageRenderer';
 
 export const ReportsPage: React.FC = () => {
   const [reports, setReports] = useState<AIClinicalReport[]>([]);
@@ -23,6 +24,7 @@ export const ReportsPage: React.FC = () => {
   const [generateModalOpen, setGenerateModalOpen] = useState<boolean>(false);
   const [title, setTitle] = useState<string>('Q2 Clinical Quality & Population Health Intelligence Brief');
   const [selectedDatasetId, setSelectedDatasetId] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'rendered' | 'raw'>('rendered');
 
   const loadReports = async () => {
     try {
@@ -109,9 +111,9 @@ export const ReportsPage: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setGenerateModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-sm font-semibold shadow-sm shadow-cyan-500/20 transition"
+            className="btn-primary"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5" />
             Generate New Brief
           </button>
         </div>
@@ -210,7 +212,7 @@ export const ReportsPage: React.FC = () => {
                   </button>
                   <button
                     onClick={handlePrint}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold shadow-sm shadow-cyan-500/20 transition"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold shadow-sm shadow-cyan-600/20 transition active:scale-[0.98]"
                   >
                     <Printer className="w-3.5 h-3.5" /> Print / Save PDF
                   </button>
@@ -280,13 +282,47 @@ export const ReportsPage: React.FC = () => {
 
               {/* Full Markdown Document Content Preview */}
               {selectedReport.markdownContent && (
-                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                  <div className="text-xs font-mono text-slate-400 pb-2 border-b border-slate-200">
-                    Full Compiled Intelligence Brief Markdown
+                <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-xs">
+                  <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border-b border-slate-200">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-cyan-600" />
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-900 font-mono">
+                        Executive Intelligence Briefing (Full Structured Audit)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 bg-slate-200/70 p-0.5 rounded-lg text-xs">
+                      <button
+                        onClick={() => setViewMode('rendered')}
+                        className={`px-3 py-1 rounded-md font-medium transition ${
+                          viewMode === 'rendered'
+                            ? 'bg-white text-slate-900 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Formatted Brief
+                      </button>
+                      <button
+                        onClick={() => setViewMode('raw')}
+                        className={`px-3 py-1 rounded-md font-medium transition ${
+                          viewMode === 'raw'
+                            ? 'bg-white text-slate-900 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Raw Markdown
+                      </button>
+                    </div>
                   </div>
-                  <pre className="text-xs font-mono text-slate-600 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
-                    {selectedReport.markdownContent}
-                  </pre>
+
+                  <div className="p-6">
+                    {viewMode === 'rendered' ? (
+                      <ClinicalMessageRenderer content={selectedReport.markdownContent} />
+                    ) : (
+                      <pre className="text-xs font-mono text-slate-700 whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        {selectedReport.markdownContent}
+                      </pre>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -367,7 +403,7 @@ export const ReportsPage: React.FC = () => {
               <button
                 onClick={handleGenerateReport}
                 disabled={generating}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold shadow-sm shadow-cyan-500/20 disabled:opacity-50 transition"
+                className="btn-primary"
               >
                 {generating ? (
                   <>

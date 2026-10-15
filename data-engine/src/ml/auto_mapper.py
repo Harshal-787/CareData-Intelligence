@@ -45,12 +45,18 @@ class FeatureAutoMapper:
     def extract_numeric(val: Any, default: float = 0.0) -> float:
         if val is None:
             return default
+        if isinstance(val, bool):
+            return 1.0 if val else 0.0
         if isinstance(val, (int, float)):
             if math.isnan(val):
                 return default
             return float(val)
         
-        clean = str(val).replace("$", "").replace(",", "").strip()
+        clean = str(val).replace("$", "").replace(",", "").strip().lower()
+        if clean in ["true", "t", "yes", "y", "1"]:
+            return 1.0
+        if clean in ["false", "f", "no", "n", "0"]:
+            return 0.0
         try:
             return float(clean)
         except ValueError:

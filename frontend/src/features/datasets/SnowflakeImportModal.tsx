@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { X, Database, CloudUpload, Loader2, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
+import { X, Database, CloudUpload, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { fetchSnowflakeStatus, triggerSnowflakeSync, fetchSnowflakeTables } from "../../api/analyticsApi";
 import { SnowflakeConfig } from "../../types/analytics";
 
@@ -19,7 +19,7 @@ export const SnowflakeImportModal: React.FC<SnowflakeImportModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [connected, setConnected] = useState(false);
-  const [tableName, setTableName] = useState("clinical_encounters");
+  const [tableName, setTableName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [config, setConfig] = useState<SnowflakeConfig | null>(null);
@@ -31,7 +31,7 @@ export const SnowflakeImportModal: React.FC<SnowflakeImportModalProps> = ({
       setChecking(true);
       setError(null);
       setSuccess(false);
-      setTableName("clinical_encounters");
+      setTableName("");
       setTables([]);
       
       fetchSnowflakeStatus()

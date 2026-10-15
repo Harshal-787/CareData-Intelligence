@@ -354,9 +354,9 @@ export const DeduplicationPage: React.FC = () => {
             <button
               onClick={handleGenerateSample}
               disabled={generatingSample}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white text-sm font-semibold rounded-2xl shadow-sm shadow-emerald-500/20 transition-all cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-sm shadow-emerald-600/20 transition-all cursor-pointer disabled:opacity-50"
             >
-              <Sparkles className={`w-4 h-4 ${generatingSample ? 'animate-spin' : ''}`} />
+              <Sparkles className={`w-3.5 h-3.5 ${generatingSample ? 'animate-spin' : ''}`} />
               <span>{generatingSample ? "Creating Demo Feed..." : "Generate Demo Dataset"}</span>
             </button>
           ) : (
@@ -393,7 +393,7 @@ export const DeduplicationPage: React.FC = () => {
           <button
             onClick={handleRunDeduplication}
             disabled={runningDedupe || !selectedDatasetId}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-sm font-semibold rounded-2xl shadow-sm shadow-cyan-500/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold rounded-xl shadow-sm shadow-cyan-600/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
           >
             {runningDedupe ? (
               <>
@@ -665,7 +665,7 @@ export const DeduplicationPage: React.FC = () => {
                           <button
                             onClick={() => openMergeModal(pair)}
                             disabled={isResolving}
-                            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer"
                           >
                             <Sliders className="w-3.5 h-3.5" />
                             <span>Merge & Build Golden Record</span>

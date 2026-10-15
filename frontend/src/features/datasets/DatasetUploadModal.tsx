@@ -238,7 +238,7 @@ export const DatasetUploadModal: React.FC<DatasetUploadModalProps> = ({
             <button
               type="submit"
               disabled={!selectedFile || uploading}
-              className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-bold hover:from-cyan-600 hover:to-blue-600 shadow-lg shadow-cyan-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-primary py-2.5 px-5 text-sm"
             >
               {uploading ? (
                 <>

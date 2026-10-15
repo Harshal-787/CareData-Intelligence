@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"runtime"
 	"time"
@@ -47,7 +48,7 @@ var serverStartTime = time.Now()
 
 // SystemHealth godoc
 // @Summary      SuperAdmin detailed system health
-// @Description  Returns real-time memory, DB connection, and uptime stats
+// @Description  Returns real-time memory, DB connection, multi-service latency and uptime stats
 // @Tags         System & Health
 // @Produce      json
 // @Security     BearerAuth
@@ -59,13 +60,82 @@ func (h *Handler) SystemHealth(w http.ResponseWriter, r *http.Request) {
 
 	uptimeSeconds := time.Since(serverStartTime).Seconds()
 
+	// 1. PostgreSQL Database Health & Latency Probe
+	startDB := time.Now()
 	dbStatus := "ONLINE"
 	if err := h.repo.PingDB(); err != nil {
 		dbStatus = "DEGRADED"
 	}
+	dbLatency := time.Since(startDB).Milliseconds()
+	if dbLatency < 1 {
+		dbLatency = 1
+	}
+
+	// 2. Redis Event & Queue Probe
+	redisStatus := "ONLINE"
+	startRedis := time.Now()
+	connRedis, err := net.DialTimeout("tcp", "localhost:6379", 600*time.Millisecond)
+	if err != nil {
+		redisStatus = "DEGRADED"
+	} else {
+		connRedis.Close()
+	}
+	redisLatency := time.Since(startRedis).Milliseconds()
+	if redisLatency < 1 {
+		redisLatency = 1
+	}
+
+	// 3. MinIO S3 Object Storage Health Probe
+	minioStatus := "ONLINE"
+	startMinio := time.Now()
+	clientMinio := &http.Client{Timeout: 800 * time.Millisecond}
+	respMinio, err := clientMinio.Get("http://localhost:9000/minio/health/live")
+	if err != nil || respMinio.StatusCode != http.StatusOK {
+		minioStatus = "DEGRADED"
+	} else {
+		respMinio.Body.Close()
+	}
+	minioLatency := time.Since(startMinio).Milliseconds()
+	if minioLatency < 1 {
+		minioLatency = 1
+	}
+
+	// 4. Python Data Engine Probe
+	engineStatus := "ONLINE"
+	startEngine := time.Now()
+	clientEngine := &http.Client{Timeout: 800 * time.Millisecond}
+	respEngine, err := clientEngine.Get("http://localhost:8001/docs")
+	if err != nil || respEngine.StatusCode != http.StatusOK {
+		engineStatus = "DEGRADED"
+	} else {
+		respEngine.Body.Close()
+	}
+	engineLatency := time.Since(startEngine).Milliseconds()
+	if engineLatency < 1 {
+		engineLatency = 1
+	}
+
+	// 5. Query Actual Lakehouse & System Aggregates
+	dsStats, _ := h.repo.GetDatasetStats("")
+	totalDatasets := int64(0)
+	totalRecords := int64(0)
+	totalSizeBytes := int64(0)
+	if dsStats != nil {
+		totalDatasets = dsStats.TotalDatasets
+		totalRecords = dsStats.TotalRecords
+		totalSizeBytes = dsStats.TotalSizeBytes
+	}
+
+	orgs, _ := h.repo.ListOrgs()
+	users, _ := h.repo.ListUsersByOrg("")
+
+	overallStatus := "HEALTHY"
+	if dbStatus == "DEGRADED" || redisStatus == "DEGRADED" || minioStatus == "DEGRADED" {
+		overallStatus = "DEGRADED"
+	}
 
 	stats := map[string]interface{}{
-		"status": "HEALTHY",
+		"status":        overallStatus,
 		"uptimeSeconds": uptimeSeconds,
 		"memory": map[string]interface{}{
 			"allocBytes": m.Alloc,
@@ -74,8 +144,29 @@ func (h *Handler) SystemHealth(w http.ResponseWriter, r *http.Request) {
 		},
 		"routines": runtime.NumGoroutine(),
 		"database": map[string]interface{}{
-			"status": dbStatus,
-			"latencyMs": 12,
+			"status":    dbStatus,
+			"latencyMs": dbLatency,
+		},
+		"redis": map[string]interface{}{
+			"status":    redisStatus,
+			"latencyMs": redisLatency,
+		},
+		"minio": map[string]interface{}{
+			"status":    minioStatus,
+			"latencyMs": minioLatency,
+		},
+		"dataEngine": map[string]interface{}{
+			"status":    engineStatus,
+			"latencyMs": engineLatency,
+		},
+		"lakehouse": map[string]interface{}{
+			"totalDatasets":  totalDatasets,
+			"totalRecords":   totalRecords,
+			"totalSizeBytes": totalSizeBytes,
+		},
+		"counts": map[string]interface{}{
+			"totalOrgs":  len(orgs),
+			"totalUsers": len(users),
 		},
 		"timestamp": time.Now(),
 	}

@@ -130,8 +130,8 @@ export const OrganizationsDashboard: React.FC = () => {
               className="pl-9 pr-4 py-2.5 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 w-[240px] shadow-sm transition-all"
             />
           </div>
-          <button className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-cyan-500/25 hover:from-cyan-400 hover:to-blue-500 transition-all hover:-translate-y-0.5">
-            <Building2 className="h-4 w-4" /> Onboard New
+          <button className="btn-primary">
+            <Building2 className="h-3.5 w-3.5" /> Onboard New
           </button>
         </div>
       </div>

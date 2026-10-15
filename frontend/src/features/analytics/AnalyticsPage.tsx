@@ -22,7 +22,23 @@ import {
   HeartPulse,
   BedDouble,
   FileCode,
+  PieChart as PieIcon,
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from 'recharts';
 import {
   fetchAnalyticsOverview,
   executeOlapQuery,
@@ -32,6 +48,9 @@ import {
   AnalyticsFilterParams,
   SQLQueryResponse,
 } from '../../types/analytics';
+
+const PAYER_COLORS = ['#0891b2', '#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+const AGE_COLORS = ['#38bdf8', '#0ea5e9', '#0284c7', '#0369a1', '#075985'];
 
 export const AnalyticsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'sql_studio'>('overview');
@@ -52,7 +71,6 @@ export const AnalyticsPage: React.FC = () => {
   const [sqlResult, setSqlResult] = useState<SQLQueryResponse | null>(null);
   const [sqlExecuting, setSqlExecuting] = useState<boolean>(false);
   const [copiedQuery, setCopiedQuery] = useState<boolean>(false);
-
 
   // Load Overview Data
   const loadAnalytics = async () => {
@@ -107,7 +125,6 @@ export const AnalyticsPage: React.FC = () => {
     }
   };
 
-
   // Export Results to CSV
   const handleExportCSV = () => {
     if (!sqlResult || !sqlResult.rows || sqlResult.rows.length === 0) return;
@@ -158,10 +175,10 @@ export const AnalyticsPage: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-300 pb-12">
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
         <div>
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-gradient-to-tr from-cyan-600 to-blue-600 text-white shadow-sm shadow-blue-500/20">
+            <div className="p-2.5 rounded-2xl bg-cyan-600 text-white shadow-sm shadow-cyan-600/30 flex items-center justify-center">
               <BarChart3 className="w-6 h-6" />
             </div>
             <div>
@@ -169,12 +186,12 @@ export const AnalyticsPage: React.FC = () => {
                 <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
                   Healthcare Analytics & OLAP Engine
                 </h1>
-                <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-cyan-100 text-cyan-600 border border-cyan-200 flex items-center gap-1">
-                  <Zap className="w-3 h-3" /> Phase 5
+                <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200 flex items-center gap-1 shadow-2xs">
+                  <Zap className="w-3 h-3 text-cyan-600" /> DuckDB Columnar
                 </span>
               </div>
-              <p className="text-sm text-slate-400">
-                Sub-second DuckDB columnar queries, population health trends, length of stay & readmission KPIs
+              <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
+                Sub-second columnar OLAP queries, longitudinal patient flow trends, length of stay & readmission KPIs
               </p>
             </div>
           </div>
@@ -182,56 +199,55 @@ export const AnalyticsPage: React.FC = () => {
 
         {/* Action Controls & Navigation Tabs */}
         <div className="flex items-center gap-3">
-          <div className="flex bg-white border border-slate-200 rounded-lg p-1">
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                 activeTab === 'overview'
-                  ? 'bg-blue-600 text-slate-900 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-700'
+                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Activity className="w-3.5 h-3.5" /> Clinical KPIs
+              <Activity className="w-3.5 h-3.5 text-cyan-600" /> Clinical KPIs
             </button>
             <button
               onClick={() => {
                 setActiveTab('sql_studio');
                 if (!sqlResult) handleRunQuery();
               }}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                 activeTab === 'sql_studio'
-                  ? 'bg-blue-600 text-slate-900 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-700'
+                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Terminal className="w-3.5 h-3.5" /> DuckDB SQL Studio
+              <Terminal className="w-3.5 h-3.5 text-cyan-600" /> DuckDB SQL Studio
             </button>
-
           </div>
 
           <button
             onClick={loadAnalytics}
             disabled={loading}
-            className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+            className="p-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-2xs transition-all active:scale-95"
             title="Refresh Analytics"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-cyan-600' : ''}`} />
           </button>
         </div>
       </div>
 
       {/* Multi-Dimensional Filter Bar */}
-      <div className="bg-white backdrop-blur border border-slate-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
+      <div className="card-premium p-4 flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400">
-            <Filter className="w-3.5 h-3.5 text-blue-600" /> Cohort Filters:
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+            <Filter className="w-3.5 h-3.5 text-cyan-600" /> Cohort Filters:
           </div>
 
           {/* Dataset Selector */}
           <select
             value={selectedDataset}
             onChange={(e) => setSelectedDataset(e.target.value)}
-            className="bg-slate-50 border border-slate-750 text-slate-700 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
+            className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-medium rounded-xl px-3 py-1.5 focus:outline-none focus:border-cyan-500 shadow-2xs"
           >
             <option value="">All Ingested Datasets</option>
             {analyticsData?.availableFilterOptions?.datasets?.map((ds) => (
@@ -245,7 +261,7 @@ export const AnalyticsPage: React.FC = () => {
           <select
             value={selectedDateRange}
             onChange={(e) => setSelectedDateRange(e.target.value)}
-            className="bg-slate-50 border border-slate-750 text-slate-700 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
+            className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-medium rounded-xl px-3 py-1.5 focus:outline-none focus:border-cyan-500 shadow-2xs"
           >
             <option value="all">All Historical Dates</option>
             <option value="30d">Last 30 Days</option>
@@ -257,7 +273,7 @@ export const AnalyticsPage: React.FC = () => {
           <select
             value={selectedDept}
             onChange={(e) => setSelectedDept(e.target.value)}
-            className="bg-slate-50 border border-slate-750 text-slate-700 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
+            className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-medium rounded-xl px-3 py-1.5 focus:outline-none focus:border-cyan-500 shadow-2xs"
           >
             <option value="">All Clinical Departments</option>
             {analyticsData?.availableFilterOptions?.departments?.map((d) => (
@@ -271,7 +287,7 @@ export const AnalyticsPage: React.FC = () => {
           <select
             value={selectedAdmissionType}
             onChange={(e) => setSelectedAdmissionType(e.target.value)}
-            className="bg-slate-50 border border-slate-750 text-slate-700 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
+            className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-medium rounded-xl px-3 py-1.5 focus:outline-none focus:border-cyan-500 shadow-2xs"
           >
             <option value="">All Admission Types</option>
             <option value="Inpatient">Inpatient</option>
@@ -288,7 +304,7 @@ export const AnalyticsPage: React.FC = () => {
                 setSelectedDept('');
                 setSelectedAdmissionType('');
               }}
-              className="text-xs text-blue-600 hover:text-blue-300 underline underline-offset-2"
+              className="text-xs font-semibold text-cyan-600 hover:text-cyan-800 underline underline-offset-2 transition-colors"
             >
               Reset Filters
             </button>
@@ -296,19 +312,19 @@ export const AnalyticsPage: React.FC = () => {
         </div>
 
         {/* Engine Performance Badge */}
-        <div className="flex items-center gap-2 text-xs text-slate-400">
+        <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
           <span className="flex h-2 w-2 relative">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
-          <span>DuckDB In-Memory OLAP Engine: <strong className="text-emerald-600 font-mono">⚡ 1.2ms</strong></span>
+          <span>DuckDB Engine Query Speed: <strong className="text-emerald-700 font-mono">⚡ 1.2ms</strong></span>
         </div>
       </div>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-2xl flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" />
-          <p className="text-sm">{error}</p>
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-2xl flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-600" />
+          <p className="text-sm font-medium">{error}</p>
         </div>
       )}
 
@@ -318,252 +334,299 @@ export const AnalyticsPage: React.FC = () => {
           {/* Executive KPI Scorecards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
             {/* Total Encounters */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:border-slate-200 transition-colors">
-              <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+            <div className="card-premium">
+              <div className="flex items-center justify-between text-slate-600 text-xs font-semibold mb-1">
                 <span>Total Encounters</span>
-                <Users className="w-4 h-4 text-blue-600" />
+                <Users className="w-4 h-4 text-cyan-600" />
               </div>
-              <div className="text-2xl font-bold text-slate-900 tracking-tight">
+              <div className="text-2xl font-bold text-slate-900 tracking-tight mt-1">
                 {kpis?.totalEncounters ? kpis.totalEncounters.toLocaleString() : '0'}
               </div>
-              <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600">
+              <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-600">
                 <TrendingUp className="w-3.5 h-3.5" />
-                <span>{kpis?.encountersGrowthPct !== undefined ? `${kpis.encountersGrowthPct > 0 ? '+' : ''}${kpis.encountersGrowthPct.toFixed(1)}% vs last period` : '0% vs last period'}</span>
+                <span>{kpis?.encountersGrowthPct !== undefined ? `${kpis.encountersGrowthPct > 0 ? '+' : ''}${kpis.encountersGrowthPct.toFixed(1)}% vs prior` : '0% vs prior'}</span>
               </div>
             </div>
 
             {/* Average Length of Stay */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:border-slate-200 transition-colors">
-              <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+            <div className="card-premium">
+              <div className="flex items-center justify-between text-slate-600 text-xs font-semibold mb-1">
                 <span>Average LOS</span>
-                <Clock className="w-4 h-4 text-cyan-600" />
+                <Clock className="w-4 h-4 text-blue-600" />
               </div>
-              <div className="text-2xl font-bold text-slate-900 tracking-tight">
+              <div className="text-2xl font-bold text-slate-900 tracking-tight mt-1">
                 {kpis?.averageLosDays ? `${kpis.averageLosDays} Days` : 'N/A'}
               </div>
-              <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600">
+              <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-600">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>{kpis?.losDeltaDays !== undefined ? `${kpis.losDeltaDays > 0 ? '+' : ''}${kpis.losDeltaDays.toFixed(1)} days delta` : '0 days delta'}</span>
+                <span>{kpis?.losDeltaDays !== undefined ? `${kpis.losDeltaDays > 0 ? '+' : ''}${kpis.losDeltaDays.toFixed(1)}d delta` : '0d delta'}</span>
               </div>
             </div>
 
             {/* 30-Day Readmissions */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:border-slate-200 transition-colors">
-              <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+            <div className="card-premium">
+              <div className="flex items-center justify-between text-slate-600 text-xs font-semibold mb-1">
                 <span>30-Day Readmissions</span>
                 <HeartPulse className="w-4 h-4 text-rose-600" />
               </div>
-              <div className="text-2xl font-bold text-slate-900 tracking-tight">
+              <div className="text-2xl font-bold text-slate-900 tracking-tight mt-1">
                 {kpis?.readmissionRatePct ? `${kpis.readmissionRatePct}%` : 'N/A'}
               </div>
-              <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600">
-                <span>{kpis?.readmissionDeltaPct !== undefined ? `${kpis.readmissionDeltaPct > 0 ? '+' : ''}${kpis.readmissionDeltaPct.toFixed(1)}% vs benchmark` : '0% vs benchmark'}</span>
+              <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+                <span>{kpis?.readmissionDeltaPct !== undefined ? `${kpis.readmissionDeltaPct > 0 ? '+' : ''}${kpis.readmissionDeltaPct.toFixed(1)}% benchmark` : '0% benchmark'}</span>
               </div>
             </div>
 
             {/* Active Patients */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:border-slate-200 transition-colors">
-              <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+            <div className="card-premium">
+              <div className="flex items-center justify-between text-slate-600 text-xs font-semibold mb-1">
                 <span>Active Patients (MPI)</span>
                 <Activity className="w-4 h-4 text-purple-600" />
               </div>
-              <div className="text-2xl font-bold text-slate-900 tracking-tight">
+              <div className="text-2xl font-bold text-slate-900 tracking-tight mt-1">
                 {kpis?.activePatients ? kpis.activePatients.toLocaleString() : '0'}
               </div>
-              <div className="mt-2 text-xs text-slate-400">
-                <span>Across {kpis?.datasetsCount || 3} source datasets</span>
+              <div className="mt-2 text-xs font-medium text-slate-500">
+                <span>Across {kpis?.datasetsCount || 1} lake datasets</span>
               </div>
             </div>
 
             {/* Emergency Ratio */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:border-slate-200 transition-colors">
-              <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-                <span>Emergency Encounter %</span>
+            <div className="card-premium">
+              <div className="flex items-center justify-between text-slate-600 text-xs font-semibold mb-1">
+                <span>Emergency Ratio</span>
                 <BedDouble className="w-4 h-4 text-amber-600" />
               </div>
-              <div className="text-2xl font-bold text-slate-900 tracking-tight">
+              <div className="text-2xl font-bold text-slate-900 tracking-tight mt-1">
                 {kpis?.emergencyRatioPct ? `${kpis.emergencyRatioPct}%` : 'N/A'}
               </div>
-              <div className="mt-2 text-xs text-amber-600">
-                <span>Triage acuity: {kpis?.emergencyRatioPct ? (kpis.emergencyRatioPct > 30 ? 'High' : 'Moderate') : 'N/A'}</span>
+              <div className="mt-2 text-xs font-medium text-amber-700">
+                <span>Triage Acuity: {kpis?.emergencyRatioPct ? (kpis.emergencyRatioPct > 30 ? 'High' : 'Optimal') : 'Normal'}</span>
               </div>
             </div>
 
             {/* Total Incurred Cost */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:border-slate-200 transition-colors">
-              <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-                <span>Total Incurred Cost</span>
+            <div className="card-premium">
+              <div className="flex items-center justify-between text-slate-600 text-xs font-semibold mb-1">
+                <span>Total Direct Cost</span>
                 <DollarSign className="w-4 h-4 text-emerald-600" />
               </div>
-              <div className="text-2xl font-bold text-slate-900 tracking-tight">
+              <div className="text-2xl font-bold text-slate-900 tracking-tight mt-1">
                 {kpis?.totalIncurredCost
                   ? `$${(kpis.totalIncurredCost / 1000000).toFixed(1)}M`
-                  : 'N/A'}
+                  : '$0M'}
               </div>
-              <div className="mt-2 text-xs text-slate-400">
+              <div className="mt-2 text-xs font-medium text-slate-500">
                 <span>Avg: ${kpis?.averageCostPerVisit ? kpis.averageCostPerVisit.toLocaleString() : '0'}/visit</span>
               </div>
             </div>
           </div>
 
-          {/* Visual Charts Grid: Volume Trends & Top ICD-10 Diagnoses */}
+          {/* Real Recharts Volume Trends & ICD-10 Ranking */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Patient Flow & Encounter Volume Time-Series */}
-            <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-4">
+            {/* Real Recharts Patient Flow Area Chart */}
+            <div className="lg:col-span-7 card-premium">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
                 <div>
                   <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-blue-600" /> Encounter Volume & Patient Flow Trends
+                    <TrendingUp className="w-4 h-4 text-cyan-600" /> Longitudinal Encounter & Patient Flow Trends
                   </h2>
-                  <p className="text-xs text-slate-400">Monthly admissions, discharges, and inpatient/emergency breakdown</p>
-                </div>
-                <div className="flex items-center gap-3 text-xs">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Admissions
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-cyan-400"></span> Discharges
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Emergency
-                  </span>
+                  <p className="text-xs text-slate-600 mt-0.5">Live DuckDB aggregation across monthly admissions, discharges & emergency triage</p>
                 </div>
               </div>
 
-              {/* Bar / Column Chart Visualization */}
-              <div className="h-64 flex items-end gap-3 pt-6 pb-2 px-2">
-                {analyticsData?.volumeTrends?.map((point) => {
-                  const maxVol = Math.max(...(analyticsData?.volumeTrends?.map((p) => p.totalVolume) || [3000]));
-                  const heightPct = Math.min(100, Math.max(15, (point.totalVolume / maxVol) * 100));
-                  return (
-                    <div key={point.period} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group relative">
-                      {/* Tooltip on hover */}
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full mb-2 bg-slate-50 border border-slate-200 text-slate-100 text-xs rounded-lg p-2 shadow-sm pointer-events-none z-20 whitespace-nowrap">
-                        <p className="font-bold text-slate-900 mb-1">{point.period}</p>
-                        <p className="text-blue-600">Total: {point.totalVolume.toLocaleString()}</p>
-                        <p className="text-cyan-600">Admissions: {point.admissions.toLocaleString()}</p>
-                        <p className="text-rose-600">Emergency: {point.emergency.toLocaleString()}</p>
-                      </div>
-
-                      {/* Stacked Bar */}
-                      <div
-                        className="w-full rounded-t-lg overflow-hidden bg-slate-50 flex flex-col justify-end transition-all duration-300 group-hover:brightness-110"
-                        style={{ height: `${heightPct}%` }}
-                      >
-                        <div className="w-full bg-blue-600 transition-all" style={{ height: '48%' }} title="Inpatient" />
-                        <div className="w-full bg-cyan-500 transition-all" style={{ height: '32%' }} title="Outpatient" />
-                        <div className="w-full bg-rose-500 transition-all" style={{ height: '20%' }} title="Emergency" />
-                      </div>
-                      <span className="text-[11px] font-medium text-slate-400">{point.period}</span>
-                    </div>
-                  );
-                })}
+              {/* Real Recharts Area Chart */}
+              <div className="h-72 w-full pt-2">
+                {analyticsData?.volumeTrends && analyticsData.volumeTrends.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={analyticsData.volumeTrends}
+                      margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient id="colorAdmissions" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#0891b2" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#0891b2" stopOpacity={0.0} />
+                        </linearGradient>
+                        <linearGradient id="colorEmergency" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.0} />
+                        </linearGradient>
+                        <linearGradient id="colorDischarges" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis
+                        dataKey="period"
+                        tick={{ fontSize: 11, fill: '#475569', fontWeight: 500 }}
+                        axisLine={{ stroke: '#cbd5e1' }}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: '#475569', fontWeight: 500 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#ffffff',
+                          borderRadius: '12px',
+                          border: '1px solid #e2e8f0',
+                          boxShadow: '0 8px 20px rgba(15, 23, 42, 0.08)',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#0f172a',
+                        }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                      <Area
+                        type="monotone"
+                        dataKey="admissions"
+                        name="Inpatient Admissions"
+                        stroke="#0891b2"
+                        strokeWidth={2.5}
+                        fillOpacity={1}
+                        fill="url(#colorAdmissions)"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="emergency"
+                        name="Emergency Visits"
+                        stroke="#f43f5e"
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#colorEmergency)"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="discharges"
+                        name="Discharges"
+                        stroke="#10b981"
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#colorDischarges)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-xs text-slate-500 font-medium">
+                    {loading ? 'Executing DuckDB analytics calculation...' : 'No historical volume records available.'}
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Top Diagnoses & ICD-10 Ranking */}
-            <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-5">
+            <div className="lg:col-span-5 card-premium">
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                     <Stethoscope className="w-4 h-4 text-cyan-600" /> Top Primary Diagnoses (ICD-10)
                   </h2>
-                  <p className="text-xs text-slate-400">Admissions volume & readmission rate by diagnosis</p>
+                  <p className="text-xs text-slate-600 mt-0.5">Encounter volume & readmission incidence by diagnosis</p>
                 </div>
               </div>
 
-              <div className="space-y-3 overflow-y-auto max-h-64 pr-1">
-                {analyticsData?.topDiagnoses?.map((diag, idx) => (
-                  <div key={diag.icd10Code + idx} className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 hover:border-slate-200 transition-colors">
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <div className="flex items-center gap-1.5 font-semibold text-slate-700">
-                        <span className="font-mono text-cyan-600 bg-cyan-100 px-1.5 py-0.5 rounded border border-cyan-200 text-[11px]">
-                          {diag.icd10Code}
-                        </span>
-                        <span className="truncate max-w-[190px]" title={diag.diagnosisName}>
-                          {diag.diagnosisName}
-                        </span>
+              <div className="space-y-2.5 overflow-y-auto max-h-72 pr-1">
+                {analyticsData?.topDiagnoses && analyticsData.topDiagnoses.length > 0 ? (
+                  analyticsData.topDiagnoses.map((diag, idx) => (
+                    <div key={diag.icd10Code + idx} className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-2.5 hover:border-cyan-200 hover:bg-slate-50 transition-colors">
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                          <span className="font-mono text-cyan-700 bg-cyan-100/80 px-1.5 py-0.5 rounded border border-cyan-200 text-[11px]">
+                            {diag.icd10Code}
+                          </span>
+                          <span className="truncate max-w-[190px]" title={diag.diagnosisName}>
+                            {diag.diagnosisName}
+                          </span>
+                        </div>
+                        <span className="text-slate-900 font-bold">{diag.patientCount.toLocaleString()} pts</span>
                       </div>
-                      <span className="text-slate-600 font-bold">{diag.patientCount.toLocaleString()} pts</span>
-                    </div>
 
-                    {/* Progress Bar & Badges */}
-                    <div className="w-full bg-slate-50 rounded-full h-1.5 my-1.5 overflow-hidden">
-                      <div
-                        className="bg-gradient-to-r from-blue-500 to-cyan-400 h-full rounded-full"
-                        style={{ width: `${Math.min(100, diag.percentage * 5)}%` }}
-                      />
-                    </div>
+                      {/* Progress Bar */}
+                      <div className="w-full bg-slate-200/80 rounded-full h-1.5 my-1.5 overflow-hidden">
+                        <div
+                          className="bg-cyan-600 h-full rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(100, Math.max(5, diag.percentage * 4))}%` }}
+                        />
+                      </div>
 
-                    <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1">
-                      <span className="text-slate-400">{diag.category}</span>
-                      <div className="flex items-center gap-3">
-                        <span>LOS: <strong className="text-slate-700">{diag.avgLosDays}d</strong></span>
-                        <span className="text-rose-600">Readmit: <strong>{diag.readmissionRate}%</strong></span>
-                        <span className="text-emerald-600">Avg: <strong>${diag.avgCost.toLocaleString()}</strong></span>
+                      <div className="flex items-center justify-between text-[11px] font-medium text-slate-500 mt-1">
+                        <span className="text-slate-600">{diag.category}</span>
+                        <div className="flex items-center gap-3">
+                          <span>LOS: <strong className="text-slate-800">{diag.avgLosDays}d</strong></span>
+                          <span className="text-rose-600">Readmit: <strong>{diag.readmissionRate}%</strong></span>
+                          <span className="text-emerald-700 font-semibold">Avg: <strong>${diag.avgCost.toLocaleString()}</strong></span>
+                        </div>
                       </div>
                     </div>
+                  ))
+                ) : (
+                  <div className="py-12 text-center text-xs text-slate-500">
+                    No diagnosis breakdown records available.
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>
 
-          {/* Department Utilization & Bed Capacity */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5">
+          {/* Department Utilization Cards */}
+          <div className="card-premium">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <Building2 className="w-4 h-4 text-purple-600" /> Clinical Department Utilization & Operational Efficiency
                 </h2>
-                <p className="text-xs text-slate-400">Bed occupancy rates, average length of stay, and direct incurred costs per encounter</p>
+                <p className="text-xs text-slate-600 mt-0.5">Bed occupancy rates, average length of stay, and direct incurred costs per encounter</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {analyticsData?.departments?.map((dept) => (
-                <div key={dept.department} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 hover:border-purple-200 transition-colors">
+                <div key={dept.department} className="bg-slate-50/70 border border-slate-200/90 rounded-xl p-4 hover:border-purple-300 transition-all">
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="font-bold text-slate-900 text-sm truncate" title={dept.department}>
                       {dept.department}
                     </h3>
-                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
                       dept.bedOccupancyPct > 90
-                        ? 'bg-rose-100 text-rose-600 border border-rose-200'
+                        ? 'bg-rose-100 text-rose-700 border border-rose-200'
                         : dept.bedOccupancyPct > 80
-                        ? 'bg-amber-100 text-amber-600 border border-amber-200'
-                        : 'bg-emerald-100 text-emerald-600 border border-emerald-200'
+                        ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                        : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                     }`}>
                       {dept.bedOccupancyPct}% Occupancy
                     </span>
                   </div>
 
-                  <div className="space-y-2 mt-3 text-xs">
-                    <div className="flex justify-between text-slate-400">
+                  <div className="space-y-1.5 mt-3 text-xs">
+                    <div className="flex justify-between text-slate-600">
                       <span>Encounters:</span>
-                      <strong className="text-slate-700">{dept.encounterCount.toLocaleString()}</strong>
+                      <strong className="text-slate-900">{dept.encounterCount.toLocaleString()}</strong>
                     </div>
-                    <div className="flex justify-between text-slate-400">
+                    <div className="flex justify-between text-slate-600">
                       <span>Average LOS:</span>
-                      <strong className="text-cyan-600">{dept.averageLosDays} Days</strong>
+                      <strong className="text-cyan-700 font-semibold">{dept.averageLosDays} Days</strong>
                     </div>
-                    <div className="flex justify-between text-slate-400">
+                    <div className="flex justify-between text-slate-600">
                       <span>Avg Cost / Visit:</span>
-                      <strong className="text-emerald-600">${dept.averageCost.toLocaleString()}</strong>
+                      <strong className="text-emerald-700 font-semibold">${dept.averageCost.toLocaleString()}</strong>
                     </div>
-                    <div className="flex justify-between text-slate-400">
+                    <div className="flex justify-between text-slate-600">
                       <span>30-Day Readmission:</span>
-                      <strong className="text-rose-600">{dept.readmissionRate}%</strong>
+                      <strong className="text-rose-600 font-semibold">{dept.readmissionRate}%</strong>
                     </div>
                   </div>
 
                   {/* Bed Capacity Meter */}
-                  <div className="w-full bg-slate-50 rounded-full h-2 mt-3 overflow-hidden">
+                  <div className="w-full bg-slate-200/80 rounded-full h-2 mt-3 overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${
+                      className={`h-full rounded-full transition-all duration-500 ${
                         dept.bedOccupancyPct > 90 ? 'bg-rose-500' : dept.bedOccupancyPct > 80 ? 'bg-amber-500' : 'bg-emerald-500'
                       }`}
-                      style={{ width: `${dept.bedOccupancyPct}%` }}
+                      style={{ width: `${Math.min(100, dept.bedOccupancyPct)}%` }}
                     />
                   </div>
                 </div>
@@ -571,51 +634,112 @@ export const AnalyticsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Demographics & Payer Mix Section */}
+          {/* Demographics & Recharts Payer Mix Donut + Age Cohorts Bar */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Age Cohort Distribution */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5">
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 mb-3">
-                <Users className="w-4 h-4 text-blue-600" /> Patient Age Stratification
-              </h2>
-              <div className="space-y-3">
-                {analyticsData?.ageCohorts?.map((cohort) => (
-                  <div key={cohort.cohortLabel} className="space-y-1">
-                    <div className="flex justify-between text-xs text-slate-600">
-                      <span className="font-medium">Age {cohort.cohortLabel}</span>
-                      <span>{cohort.patientCount.toLocaleString()} patients ({cohort.percentage}%)</span>
-                    </div>
-                    <div className="w-full bg-slate-50 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-blue-500 h-full rounded-full"
-                        style={{ width: `${cohort.percentage}%` }}
+            {/* Age Stratification Bar Chart */}
+            <div className="card-premium">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Users className="w-4 h-4 text-blue-600" /> Patient Age Stratification
+                </h2>
+                <span className="text-xs font-semibold text-slate-500">Cohort Distribution</span>
+              </div>
+              <div className="h-56 w-full pt-1">
+                {analyticsData?.ageCohorts && analyticsData.ageCohorts.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={analyticsData.ageCohorts}
+                      margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis
+                        dataKey="cohortLabel"
+                        tick={{ fontSize: 11, fill: '#475569', fontWeight: 500 }}
+                        axisLine={{ stroke: '#cbd5e1' }}
+                        tickLine={false}
                       />
-                    </div>
+                      <YAxis
+                        tick={{ fontSize: 11, fill: '#475569', fontWeight: 500 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#ffffff',
+                          borderRadius: '12px',
+                          border: '1px solid #e2e8f0',
+                          boxShadow: '0 8px 20px rgba(15, 23, 42, 0.08)',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#0f172a',
+                        }}
+                        formatter={(val: any) => [`${Number(val).toLocaleString()} patients`, 'Cohort Size']}
+                      />
+                      <Bar dataKey="patientCount" name="Patient Count" radius={[6, 6, 0, 0]}>
+                        {analyticsData.ageCohorts.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={AGE_COLORS[index % AGE_COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-xs text-slate-500">
+                    No age distribution data available.
                   </div>
-                ))}
+                )}
               </div>
             </div>
 
-            {/* Payer / Insurance Mix */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5">
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 mb-3">
-                <DollarSign className="w-4 h-4 text-emerald-600" /> Insurance & Payer Mix Distribution
-              </h2>
-              <div className="space-y-3">
-                {analyticsData?.payerMix?.map((payer) => (
-                  <div key={payer.payerName} className="space-y-1">
-                    <div className="flex justify-between text-xs text-slate-600">
-                      <span className="font-medium">{payer.payerName}</span>
-                      <span>{payer.patientCount.toLocaleString()} pts ({payer.percentage}%)</span>
-                    </div>
-                    <div className="w-full bg-slate-50 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-emerald-500 h-full rounded-full"
-                        style={{ width: `${payer.percentage}%` }}
+            {/* Recharts Payer Mix Donut Chart */}
+            <div className="card-premium">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <PieIcon className="w-4 h-4 text-emerald-600" /> Insurance & Payer Mix Distribution
+                </h2>
+                <span className="text-xs font-semibold text-slate-500">Reimbursement Portfolios</span>
+              </div>
+              <div className="h-56 w-full flex items-center justify-center">
+                {analyticsData?.payerMix && analyticsData.payerMix.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={analyticsData.payerMix}
+                        innerRadius={50}
+                        outerRadius={75}
+                        paddingAngle={4}
+                        dataKey="patientCount"
+                        nameKey="payerName"
+                      >
+                        {analyticsData.payerMix.map((_, index) => (
+                          <Cell key={`payer-${index}`} fill={PAYER_COLORS[index % PAYER_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#ffffff',
+                          borderRadius: '12px',
+                          border: '1px solid #e2e8f0',
+                          boxShadow: '0 8px 20px rgba(15, 23, 42, 0.08)',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#0f172a',
+                        }}
+                        formatter={(val: any, name: any, item: any) => [
+                          `${Number(val).toLocaleString()} pts (${item.payload.percentage}%)`,
+                          name,
+                        ]}
                       />
-                    </div>
+                      <Legend
+                        verticalAlign="bottom"
+                        wrapperStyle={{ fontSize: '11px', fontWeight: 500 }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-xs text-slate-500">
+                    No payer mix data available.
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>
@@ -625,26 +749,26 @@ export const AnalyticsPage: React.FC = () => {
       {/* TAB 2: DUCKDB OLAP SQL STUDIO */}
       {activeTab === 'sql_studio' && (
         <div className="space-y-6">
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
+          <div className="card-premium space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <Terminal className="w-5 h-5 text-blue-600" /> DuckDB Embedded OLAP SQL Console
+                  <Terminal className="w-5 h-5 text-cyan-600" /> DuckDB Embedded OLAP SQL Console
                 </h2>
-                <p className="text-xs text-slate-400">
-                  Execute sub-second columnar queries directly across loaded Parquet datasets and clinical tables.
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Execute sub-second columnar queries directly across loaded Parquet datasets and clinical lakehouse tables.
                 </p>
               </div>
 
               {/* Template Query Selector */}
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">Templates:</span>
+                <span className="text-xs font-semibold text-slate-600">Templates:</span>
                 <select
                   onChange={(e) => {
                     const found = queryTemplates.find((t) => t.title === e.target.value);
                     if (found) setSqlQuery(found.query);
                   }}
-                  className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
+                  className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-medium rounded-xl px-3 py-1.5 focus:outline-none focus:border-cyan-500 shadow-2xs"
                 >
                   {queryTemplates.map((t) => (
                     <option key={t.title} value={t.title}>
@@ -656,10 +780,10 @@ export const AnalyticsPage: React.FC = () => {
             </div>
 
             {/* SQL Editor Area */}
-            <div className="relative border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
-              <div className="bg-white px-4 py-2 border-b border-slate-200 flex items-center justify-between">
+            <div className="relative border border-slate-200 rounded-xl overflow-hidden bg-slate-900 text-slate-100 shadow-sm">
+              <div className="bg-slate-950 px-4 py-2 border-b border-slate-800 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
-                  <FileCode className="w-4 h-4 text-cyan-600" /> sql_query.sql
+                  <FileCode className="w-4 h-4 text-cyan-400" /> clinical_lakehouse_query.sql
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -668,10 +792,10 @@ export const AnalyticsPage: React.FC = () => {
                       setCopiedQuery(true);
                       setTimeout(() => setCopiedQuery(false), 2000);
                     }}
-                    className="p-1 text-slate-400 hover:text-slate-700 text-xs flex items-center gap-1"
+                    className="p-1 px-2 text-slate-400 hover:text-slate-100 text-xs flex items-center gap-1 rounded bg-slate-800 hover:bg-slate-700 transition-colors"
                     title="Copy SQL Query"
                   >
-                    {copiedQuery ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedQuery ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                     <span>{copiedQuery ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
@@ -681,16 +805,16 @@ export const AnalyticsPage: React.FC = () => {
                 value={sqlQuery}
                 onChange={(e) => setSqlQuery(e.target.value)}
                 rows={6}
-                className="w-full bg-slate-50 font-mono text-xs text-cyan-700 p-4 focus:outline-none resize-y leading-relaxed"
+                className="w-full bg-slate-900 font-mono text-xs text-cyan-300 p-4 focus:outline-none resize-y leading-relaxed"
                 placeholder="SELECT department, COUNT(*) FROM clinical_encounters GROUP BY department;"
               />
             </div>
 
             {/* Run Action Bar */}
             <div className="flex items-center justify-between pt-1">
-              <div className="flex items-center gap-4 text-xs text-slate-400">
-                <span className="flex items-center gap-1 text-emerald-600 font-medium">
-                  <ShieldCheck className="w-4 h-4" /> Read-Only Safety Enforced
+              <div className="flex items-center gap-4 text-xs text-slate-600 font-medium">
+                <span className="flex items-center gap-1 text-emerald-700">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" /> Read-Only Safety Enforced
                 </span>
                 <span>Max rows: 500</span>
               </div>
@@ -699,7 +823,7 @@ export const AnalyticsPage: React.FC = () => {
                 <button
                   onClick={handleRunQuery}
                   disabled={sqlExecuting || !sqlQuery.trim()}
-                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs font-semibold shadow-sm shadow-blue-500/20 flex items-center gap-2 disabled:opacity-50 transition-all"
+                  className="btn-primary"
                 >
                   <Play className={`w-3.5 h-3.5 ${sqlExecuting ? 'animate-spin' : ''}`} />
                   {sqlExecuting ? 'Executing Query...' : 'Run OLAP Query'}
@@ -710,14 +834,14 @@ export const AnalyticsPage: React.FC = () => {
 
           {/* Query Results Table */}
           {sqlResult && (
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
+            <div className="card-premium space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
                 <div className="flex items-center gap-3">
                   <h3 className="text-sm font-bold text-slate-900">Query Results</h3>
-                  <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-600 border border-emerald-200 text-xs font-mono">
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-mono font-semibold">
                     ⚡ {sqlResult.executionTimeMs} ms
                   </span>
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-slate-600 font-medium">
                     {sqlResult.totalRows.toLocaleString()} rows returned
                   </span>
                 </div>
@@ -726,7 +850,7 @@ export const AnalyticsPage: React.FC = () => {
                   <button
                     onClick={handleExportCSV}
                     disabled={sqlResult.rows.length === 0}
-                    className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40"
+                    className="btn-secondary"
                   >
                     <Download className="w-3.5 h-3.5" /> Export CSV
                   </button>
@@ -734,17 +858,17 @@ export const AnalyticsPage: React.FC = () => {
               </div>
 
               {sqlResult.error ? (
-                <div className="bg-rose-100 border border-rose-200 text-rose-600 p-4 rounded-lg text-xs font-mono">
+                <div className="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl text-xs font-mono">
                   <strong>Query Error:</strong> {sqlResult.error}
                 </div>
               ) : sqlResult.rows.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 text-sm">
+                <div className="p-8 text-center text-slate-500 text-sm">
                   Query executed successfully with 0 matching rows.
                 </div>
               ) : (
-                <div className="overflow-x-auto border border-slate-200 rounded-lg">
-                  <table className="w-full text-left text-xs text-slate-600">
-                    <thead className="bg-slate-50 text-slate-400 font-semibold border-b border-slate-200">
+                <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                  <table className="w-full text-left text-xs text-slate-700">
+                    <thead className="bg-slate-100 text-slate-800 font-bold border-b border-slate-200">
                       <tr>
                         {sqlResult.columns.map((c) => (
                           <th key={c.name} className="px-4 py-3 font-mono">
@@ -757,12 +881,12 @@ export const AnalyticsPage: React.FC = () => {
                       {sqlResult.rows.map((row, rIdx) => (
                         <tr key={rIdx} className="hover:bg-slate-50 transition-colors">
                           {sqlResult.columns.map((c) => (
-                            <td key={c.name} className="px-4 py-2.5 text-slate-700">
+                            <td key={c.name} className="px-4 py-2.5 text-slate-800">
                               {row[c.name] !== null && row[c.name] !== undefined
                                 ? typeof row[c.name] === 'number'
                                   ? Number(row[c.name]).toLocaleString()
                                   : String(row[c.name])
-                                : <span className="text-slate-600">NULL</span>}
+                                : <span className="text-slate-400">NULL</span>}
                             </td>
                           ))}
                         </tr>
@@ -775,8 +899,6 @@ export const AnalyticsPage: React.FC = () => {
           )}
         </div>
       )}
-
-
     </div>
   );
 };

@@ -95,7 +95,7 @@ export const LandingNavbar: React.FC = () => {
             {user ? (
               <button
                 onClick={() => navigate("/dashboard")}
-                className="inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-semibold shadow-md shadow-cyan-500/25 transition group"
+                className="inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow-md shadow-cyan-950/25 transition group"
               >
                 <LayoutDashboard className="h-3.5 w-3.5" />
                 <span>Enter Dashboard</span>
@@ -112,7 +112,7 @@ export const LandingNavbar: React.FC = () => {
                 </Link>
                 <Link
                   to="/register"
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-semibold shadow-md shadow-cyan-500/25 transition group"
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow-md shadow-cyan-950/25 transition group"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
                   <span>Get Started</span>
@@ -168,7 +168,7 @@ export const LandingNavbar: React.FC = () => {
               {user ? (
                 <button
                   onClick={() => navigate("/dashboard")}
-                  className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-xs font-semibold shadow-md"
+                  className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-cyan-600 text-white text-xs font-semibold shadow-md"
                 >
                   <LayoutDashboard className="h-4 w-4" />
                   <span>Enter Dashboard</span>

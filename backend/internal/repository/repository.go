@@ -1701,28 +1701,42 @@ func (r *Repository) ClearMLDataForDataset(datasetID string) error {
 }
 
 func (r *Repository) SaveMLAnomalies(anomalies []domain.MLAnomaly) error {
-	for _, a := range anomalies {
-		flagsJSON, _ := json.Marshal(a.ExplanationFlags)
-		dataJSON, _ := json.Marshal(a.RecordData)
+	if len(anomalies) == 0 {
+		return nil
+	}
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
-		query := `INSERT INTO ml_anomalies (
+	query := `INSERT INTO ml_anomalies (
+		id, model_run_id, dataset_id, dataset_name, organization_id, record_id, row_number,
+		patient_id, encounter_id, patient_name, anomaly_score, severity, category,
+		description, explanation_flags_json, record_data_json, status, resolution_notes,
+		resolved_by, resolved_at, created_at
+	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`
+
+	if r.db.Driver == "sqlite3" {
+		query = `INSERT INTO ml_anomalies (
 			id, model_run_id, dataset_id, dataset_name, organization_id, record_id, row_number,
 			patient_id, encounter_id, patient_name, anomaly_score, severity, category,
 			description, explanation_flags_json, record_data_json, status, resolution_notes,
 			resolved_by, resolved_at, created_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	}
 
-		if r.db.Driver == "sqlite3" {
-			query = `INSERT INTO ml_anomalies (
-				id, model_run_id, dataset_id, dataset_name, organization_id, record_id, row_number,
-				patient_id, encounter_id, patient_name, anomaly_score, severity, category,
-				description, explanation_flags_json, record_data_json, status, resolution_notes,
-				resolved_by, resolved_at, created_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-		}
+	stmt, err := tx.Prepare(query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
 
-		_, err := r.db.Exec(
-			query,
+	for _, a := range anomalies {
+		flagsJSON, _ := json.Marshal(a.ExplanationFlags)
+		dataJSON, _ := json.Marshal(a.RecordData)
+
+		_, err := stmt.Exec(
 			a.ID, a.ModelRunID, a.DatasetID, a.DatasetName, a.OrganizationID, a.RecordID, a.RowNumber,
 			a.PatientID, a.EncounterID, a.PatientName, a.AnomalyScore, string(a.Severity), string(a.Category),
 			a.Description, string(flagsJSON), string(dataJSON), string(a.Status), a.ResolutionNotes,
@@ -1732,7 +1746,7 @@ func (r *Repository) SaveMLAnomalies(anomalies []domain.MLAnomaly) error {
 			return err
 		}
 	}
-	return nil
+	return tx.Commit()
 }
 
 func (r *Repository) ListMLAnomalies(params domain.MLFilterParams) ([]domain.MLAnomaly, int64, error) {
@@ -1892,29 +1906,43 @@ func (r *Repository) UpdateMLAnomalyStatus(id string, status domain.MLAnomalySta
 }
 
 func (r *Repository) SaveMLRiskScores(scores []domain.MLRiskScore) error {
+	if len(scores) == 0 {
+		return nil
+	}
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	query := `INSERT INTO ml_risk_scores (
+		id, model_run_id, dataset_id, dataset_name, organization_id, patient_id,
+		encounter_id, patient_name, age, gender, primary_diagnosis, risk_score,
+		risk_tier, readmission_probability, predicted_los_days, top_drivers_json,
+		clinical_recommendations_json, record_data_json, created_at
+	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`
+
+	if r.db.Driver == "sqlite3" {
+		query = `INSERT INTO ml_risk_scores (
+			id, model_run_id, dataset_id, dataset_name, organization_id, patient_id,
+			encounter_id, patient_name, age, gender, primary_diagnosis, risk_score,
+			risk_tier, readmission_probability, predicted_los_days, top_drivers_json,
+			clinical_recommendations_json, record_data_json, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	}
+
+	stmt, err := tx.Prepare(query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
 	for _, s := range scores {
 		driversJSON, _ := json.Marshal(s.TopDrivers)
 		recsJSON, _ := json.Marshal(s.ClinicalRecommendations)
 		dataJSON, _ := json.Marshal(s.RecordData)
 
-		query := `INSERT INTO ml_risk_scores (
-			id, model_run_id, dataset_id, dataset_name, organization_id, patient_id,
-			encounter_id, patient_name, age, gender, primary_diagnosis, risk_score,
-			risk_tier, readmission_probability, predicted_los_days, top_drivers_json,
-			clinical_recommendations_json, record_data_json, created_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`
-
-		if r.db.Driver == "sqlite3" {
-			query = `INSERT INTO ml_risk_scores (
-				id, model_run_id, dataset_id, dataset_name, organization_id, patient_id,
-				encounter_id, patient_name, age, gender, primary_diagnosis, risk_score,
-				risk_tier, readmission_probability, predicted_los_days, top_drivers_json,
-				clinical_recommendations_json, record_data_json, created_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-		}
-
-		_, err := r.db.Exec(
-			query,
+		_, err := stmt.Exec(
 			s.ID, s.ModelRunID, s.DatasetID, s.DatasetName, s.OrganizationID, s.PatientID,
 			s.EncounterID, s.PatientName, s.Age, s.Gender, s.PrimaryDiagnosis, s.RiskScore,
 			string(s.RiskTier), s.ReadmissionProbability, s.PredictedLOSDays, string(driversJSON),
@@ -1924,7 +1952,7 @@ func (r *Repository) SaveMLRiskScores(scores []domain.MLRiskScore) error {
 			return err
 		}
 	}
-	return nil
+	return tx.Commit()
 }
 
 func (r *Repository) ListMLRiskScores(params domain.MLFilterParams) ([]domain.MLRiskScore, int64, error) {

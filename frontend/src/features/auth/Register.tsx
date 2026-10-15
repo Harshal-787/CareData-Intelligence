@@ -139,7 +139,7 @@ export const Register: React.FC = () => {
               placeholder="Minimum 8 characters"
             />
           </label>
-          <button type="submit" className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 text-xs font-bold text-white shadow-sm shadow-cyan-200 transition hover:-translate-y-0.5">
+          <button type="submit" className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-white shadow-sm transition active:scale-[0.98]">
             Continue <ArrowRight className="size-4" />
           </button>
         </form>
@@ -167,10 +167,10 @@ export const Register: React.FC = () => {
           </label>
 
           <div className="flex gap-3 pt-4">
-            <button type="button" onClick={prevStep} className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 hover:bg-slate-50 transition w-1/3 shadow-sm">
+            <button type="button" onClick={prevStep} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 hover:bg-slate-50 transition w-1/3 shadow-xs">
               <ArrowLeft className="size-4" /> Back
             </button>
-            <button type="submit" className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 px-4 text-xs font-bold text-white shadow-sm shadow-cyan-200 transition hover:-translate-y-0.5 flex-1">
+            <button type="submit" className="flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 px-4 text-xs font-bold text-white shadow-sm transition active:scale-[0.98] flex-1">
               Continue <ArrowRight className="size-4" />
             </button>
           </div>
@@ -218,10 +218,10 @@ export const Register: React.FC = () => {
           )}
 
           <div className="flex gap-3 pt-6">
-            <button type="button" onClick={prevStep} className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 hover:bg-slate-50 transition w-1/3 shadow-sm">
+            <button type="button" onClick={prevStep} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 hover:bg-slate-50 transition w-1/3 shadow-xs">
               <ArrowLeft className="size-4" /> Back
             </button>
-            <button type="submit" disabled={loading} className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 px-4 text-xs font-bold text-white shadow-sm shadow-cyan-200 transition hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0 flex-1">
+            <button type="submit" disabled={loading} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 px-4 text-xs font-bold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 flex-1">
               {loading ? 'Processing...' : (orgMode === 'JOIN' ? 'Join & Launch' : 'Create & Launch')}
             </button>
           </div>

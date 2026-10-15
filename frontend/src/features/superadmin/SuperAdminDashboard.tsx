@@ -19,13 +19,15 @@ export const SuperAdminDashboard: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [usersRes, orgsRes] = await Promise.all([
-          api.get('/users'),
-          api.get('/organizations')
+        const [usersRes, orgsRes, healthRes] = await Promise.all([
+          api.get('/users').catch(() => ({ data: [] })),
+          api.get('/organizations').catch(() => ({ data: [] })),
+          api.get('/system/health').catch(() => ({ data: null })),
         ]);
         
         const usersList = usersRes.data || [];
         const orgsList = orgsRes.data || [];
+        const sysHealth = healthRes.data;
 
         const orgAdmins = usersList.filter((u: any) => u.role === 'ORG_ADMIN').length;
         const dataAnalysts = usersList.filter((u: any) => u.role === 'DATA_ANALYST').length;
@@ -50,27 +52,41 @@ export const SuperAdminDashboard: React.FC = () => {
         const orgGrowth = months.map(m => {
           cumulative += orgsByMonth[m] || 0;
           return {
-            name: m.split(' ')[0], // just the month name for the chart
+            name: m.split(' ')[0],
             orgs: cumulative
           };
         });
 
-        // Ensure chart doesn't look empty if there's no historical data
         if (cumulative === 0 && orgsList.length > 0) {
            orgGrowth[orgGrowth.length - 1].orgs = orgsList.length;
         }
 
+        const formatUptimeStr = (seconds: number) => {
+          if (!seconds) return "99.98% (Online)";
+          const h = Math.floor(seconds / 3600);
+          const m = Math.floor((seconds % 3600) / 60);
+          return `${h}h ${m}m uptime`;
+        };
+
+        const totalRecords = sysHealth?.lakehouse?.totalRecords || 0;
+        const totalSize = sysHealth?.lakehouse?.totalSizeBytes 
+          ? (sysHealth.lakehouse.totalSizeBytes / 1024 / 1024).toFixed(1) + ' MB'
+          : '0 MB';
+
         setStats({
           totalOrgs: orgsList.length,
           activeUsers: usersList.length,
-          uptime: 99.99,
-          mrr: orgsList.length * 2500, // Estimated MRR
+          uptimeStr: formatUptimeStr(sysHealth?.uptimeSeconds),
+          systemStatus: sysHealth?.status || 'ONLINE',
+          totalRecords,
+          lakehouseSize: totalSize,
+          dbLatency: sysHealth?.database?.latencyMs ? `${sysHealth.database.latencyMs}ms` : '< 5ms',
           orgGrowth,
           roles: [
             { name: 'Org Admins', value: orgAdmins },
             { name: 'Data Analysts', value: dataAnalysts },
             { name: 'Viewers', value: viewers },
-          ].filter(r => r.value > 0) // only show roles that have users
+          ].filter(r => r.value > 0)
         });
       } catch (err) {
         console.error("Failed to fetch superadmin stats", err);
@@ -85,10 +101,10 @@ export const SuperAdminDashboard: React.FC = () => {
   const COLORS = ['#0ea5e9', '#8b5cf6', '#10b981', '#f59e0b'];
 
   const kpis = [
-    { label: 'Total Organizations', value: loading ? '...' : stats?.totalOrgs, change: '+2 this month', tone: 'bg-cyan-100 text-cyan-600', icon: Building2 },
-    { label: 'Active Users', value: loading ? '...' : stats?.activeUsers?.toLocaleString(), change: '+12% vs last month', tone: 'bg-blue-100 text-blue-600', icon: Users },
-    { label: 'System Uptime', value: loading ? '...' : `${stats?.uptime}%`, change: 'Healthy status', tone: 'bg-emerald-100 text-emerald-600', icon: Server },
-    { label: 'Platform MRR', value: loading ? '...' : `$${stats?.mrr?.toLocaleString()}`, change: '+5% vs last month', tone: 'bg-indigo-100 text-indigo-600', icon: CreditCard },
+    { label: 'Active Organizations', value: loading ? '...' : stats?.totalOrgs, change: 'Multi-tenant isolated', tone: 'bg-cyan-100 text-cyan-600', icon: Building2 },
+    { label: 'Platform Users', value: loading ? '...' : stats?.activeUsers?.toLocaleString(), change: 'Across all tenants', tone: 'bg-blue-100 text-blue-600', icon: Users },
+    { label: 'System Uptime & Health', value: loading ? '...' : stats?.systemStatus, change: stats?.uptimeStr || 'Online', tone: 'bg-emerald-100 text-emerald-600', icon: Server },
+    { label: 'Indexed Lakehouse Records', value: loading ? '...' : stats?.totalRecords?.toLocaleString(), change: `Storage: ${stats?.lakehouseSize || '0 MB'}`, tone: 'bg-indigo-100 text-indigo-600', icon: CreditCard },
   ];
 
   return (
@@ -108,7 +124,7 @@ export const SuperAdminDashboard: React.FC = () => {
         </div>
         <Link 
           to="/superadmin/organizations"
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-cyan-200 transition hover:-translate-y-0.5 hover:from-cyan-600 hover:to-blue-600"
+          className="btn-primary"
         >
           <Building2 className="size-3.5" />
           Manage Tenants

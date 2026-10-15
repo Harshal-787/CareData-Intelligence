@@ -47,9 +47,14 @@ def process_pipeline_job(job_data: dict):
     ]
     
     bucket = "raw-data"
-    object_name = "demodata.parquet"
-    if dataset_id != "ds-demo-101":
-        object_name = f"{dataset_id}.parquet"
+    object_name = job_data.get("object_name")
+    if not object_name:
+        if dataset_id == "ds-enterprise-001":
+            object_name = "enterprise_clinical_lakehouse.parquet"
+        elif dataset_id == "ds-demo-101":
+            object_name = "demodata.parquet"
+        else:
+            object_name = f"{dataset_id}.parquet"
 
     for i, (stage_key, stage_name) in enumerate(stages):
         logger.info(f"Processing stage {stage_key}")
@@ -77,7 +82,8 @@ def process_pipeline_job(job_data: dict):
                 from src.workers.api_server import _get_dataset_statistics
                 loader = DataLoader()
                 stats = _get_dataset_statistics(loader, bucket, object_name)
-                records_processed = stats.get("rowCount", 5000)
+                overview = stats.get('overview', {})
+                records_processed = int(overview.get('total_patients', 1200))
                 summary = f"Profiled {records_processed} records across schema columns and computed null distributions"
                 
             elif stage_key == "VALIDATION":
@@ -92,11 +98,14 @@ def process_pipeline_job(job_data: dict):
                 
                 # Rule 2: Out of bounds vitals
                 bad_vitals = pd.Series(False, index=df.index)
-                if 'heart_rate' in df.columns and 'systolic' in df.columns:
-                    bad_vitals = (df['heart_rate'] < 30) | (df['heart_rate'] > 250) | (df['systolic'] < 40) | (df['systolic'] > 300)
+                hr_col = 'heart_rate' if 'heart_rate' in df.columns else None
+                sys_col = 'systolic_bp' if 'systolic_bp' in df.columns else ('systolic' if 'systolic' in df.columns else None)
+                if hr_col and sys_col:
+                    bad_vitals = (df[hr_col] < 30) | (df[hr_col] > 250) | (df[sys_col] < 40) | (df[sys_col] > 300)
                     
                 # Rule 3: Missing clinical diagnoses
-                missing_diagnosis = df['primary_diagnosis'].isnull() if 'primary_diagnosis' in df.columns else pd.Series(False, index=df.index)
+                diag_col = 'primary_diagnosis' if 'primary_diagnosis' in df.columns else ('diagnosis_description' if 'diagnosis_description' in df.columns else None)
+                missing_diagnosis = df[diag_col].isnull() if diag_col else pd.Series(False, index=df.index)
                 
                 flagged_mask = missing_demographics | bad_vitals | missing_diagnosis
                 records_flagged = int(flagged_mask.sum())
@@ -108,8 +117,9 @@ def process_pipeline_job(job_data: dict):
                 import pandas as pd
                 loader = DataLoader()
                 df = loader.load_dataset_to_polars(bucket, object_name).to_pandas()
-                # Fast blocking-based deduplication heuristic for performance
-                df['block_key'] = df['first_name'].astype(str).str[:3].str.lower() + df['date_of_birth'].astype(str)
+                name_col = 'patient_name' if 'patient_name' in df.columns else ('first_name' if 'first_name' in df.columns else df.columns[0])
+                dob_col = 'admission_date' if 'admission_date' in df.columns else ('date_of_birth' if 'date_of_birth' in df.columns else df.columns[1])
+                df['block_key'] = df[name_col].astype(str).str[:3].str.lower() + df[dob_col].astype(str).str[:4]
                 duplicates = df[df.duplicated(subset=['block_key'], keep=False)]
                 records_processed = len(df)
                 records_flagged = len(duplicates) // 2

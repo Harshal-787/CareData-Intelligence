@@ -256,7 +256,7 @@ export const LandingPage: React.FC = () => {
           {user ? (
             <button
               onClick={() => navigate('/dashboard')}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-sm shadow-sm shadow-cyan-500/25 transition-all transform hover:-translate-y-0.5"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-2xl bg-cyan-600 hover:bg-cyan-700 text-white font-semibold text-sm shadow-sm shadow-cyan-600/25 transition-all transform hover:-translate-y-0.5"
             >
               <BarChart3 className="h-4 w-4" />
               <span>Go to Live Console</span>
@@ -266,7 +266,7 @@ export const LandingPage: React.FC = () => {
             <>
               <Link
                 to="/register"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-sm shadow-sm shadow-cyan-500/25 transition-all transform hover:-translate-y-0.5"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-2xl bg-cyan-600 hover:bg-cyan-700 text-white font-semibold text-sm shadow-sm shadow-cyan-600/25 transition-all transform hover:-translate-y-0.5"
               >
                 <Sparkles className="h-4 w-4" />
                 <span>Get Started Free</span>
@@ -458,7 +458,7 @@ export const LandingPage: React.FC = () => {
               <div className="pt-4 flex items-center gap-4">
                 <Link
                   to={user ? `/${activeTab}` : '/login'}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-xs font-semibold shadow-sm shadow-cyan-500/20 hover:from-cyan-400 hover:to-blue-500 transition"
+                  className="btn-primary"
                 >
                   <span>Launch {currentTab.label}</span>
                   <ChevronRight className="h-3.5 w-3.5" />

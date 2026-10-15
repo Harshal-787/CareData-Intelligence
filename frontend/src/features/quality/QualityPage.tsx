@@ -358,10 +358,10 @@ export const QualityPage: React.FC = () => {
           <button
             onClick={handleRunAudit}
             disabled={auditing || !selectedDatasetId}
-            className="flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-semibold bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-sm shadow-cyan-500/20 transition disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-cyan-600 hover:bg-cyan-700 text-white shadow-sm shadow-cyan-600/20 transition active:scale-[0.98] disabled:opacity-50"
           >
             <Play
-              className={`h-4 w-4 ${auditing ? "animate-spin" : "fill-white"}`}
+              className={`h-3.5 w-3.5 ${auditing ? "animate-spin" : "fill-white"}`}
             />
             {auditing ? "Auditing Dataset..." : "Run Quality Audit"}
           </button>
@@ -961,9 +961,9 @@ export const QualityPage: React.FC = () => {
               </button>
               <button
                 onClick={() => setIsAddRuleOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-semibold bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-sm shadow-cyan-500/20 hover:from-cyan-400 hover:to-blue-500 transition"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-cyan-600 text-white shadow-sm shadow-cyan-600/20 hover:bg-cyan-700 transition active:scale-[0.98]"
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="h-3.5 w-3.5" />
                 Add Validation Rule
               </button>
             </div>
@@ -1238,7 +1238,7 @@ export const QualityPage: React.FC = () => {
                     </button>
                     <button
                       type="submit"
-                      className="px-5 py-2 text-xs font-semibold bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-2xl shadow-sm shadow-cyan-500/20 hover:from-cyan-400 hover:to-blue-500 transition"
+                      className="px-5 py-2 text-xs font-semibold bg-cyan-600 text-white rounded-xl shadow-sm shadow-cyan-600/20 hover:bg-cyan-700 transition active:scale-[0.98]"
                     >
                       Save Rule
                     </button>

@@ -269,9 +269,9 @@ export const PipelinePage: React.FC = () => {
           </button>
           <button
             onClick={() => setTriggerModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-sm font-semibold shadow-sm shadow-cyan-500/20 transition"
+            className="btn-primary"
           >
-            <Play className="w-4 h-4 fill-current" />
+            <Play className="w-3.5 h-3.5 fill-current" />
             Trigger Pipeline Run
           </button>
         </div>
@@ -832,7 +832,7 @@ export const PipelinePage: React.FC = () => {
               <button
                 onClick={handleTriggerRun}
                 disabled={isSubmitting}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold shadow-sm shadow-cyan-500/20 disabled:opacity-50 transition"
+                className="btn-primary"
               >
                 {isSubmitting ? (
                   <>

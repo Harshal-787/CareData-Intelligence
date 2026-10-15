@@ -5,9 +5,11 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -64,14 +66,11 @@ func (s *AnalyticsService) GetOverview(orgID string, filter domain.AnalyticsFilt
 		}, nil
 	}
 
-	// 1. Check if Snowflake is configured and connected. If so, route query to Snowflake!
-	if s.sf != nil {
-		cfg, err := s.repo.GetSnowflakeConfig(orgID)
-		if err == nil && cfg != nil && cfg.IsConnected {
-			return s.getSnowflakeOverview(orgID, filter, datasets)
-		}
-	}
+	// Always execute OLAP queries directly against imported datasets in CareData's Lakehouse (DuckDB)
+	return s.getDuckDBOverview(orgID, filter, datasets)
+}
 
+func (s *AnalyticsService) getDuckDBOverview(orgID string, filter domain.AnalyticsFilterParams, datasets []domain.Dataset) (*domain.AnalyticsOverviewResponse, error) {
 	objectNames := []string{}
 	for _, d := range datasets {
 		if d.StoragePath != "" {
@@ -129,7 +128,16 @@ func (s *AnalyticsService) GetClinicalMetrics(orgID string, filter domain.Analyt
 
 // ExecuteQuery runs an in-memory / DuckDB OLAP SQL query against loaded dataset records via Python Data Engine, OR routes to Snowflake if configured.
 func (s *AnalyticsService) ExecuteQuery(orgID string, req domain.SQLQueryRequest) (*domain.SQLQueryResponse, error) {
-	// 1. Check if the user has a provisioned Snowflake warehouse
+	datasets, err := s.repo.GetDatasetsForAnalytics(orgID, req.DatasetID)
+	if err == nil && len(datasets) > 0 && datasets[0].StoragePath != "" {
+		res, duckErr := s.executeDuckDBQuery(datasets[0].StoragePath, req.Query)
+		if duckErr == nil {
+			return res, nil
+		}
+		log.Printf("⚠️ DuckDB query returned error: %v, checking Snowflake fallback...", duckErr)
+	}
+
+	// Fallback to Snowflake if connected
 	if s.sf != nil {
 		sfCfg, err := s.repo.GetSnowflakeConfig(orgID)
 		if err == nil && sfCfg != nil && sfCfg.IsConnected {
@@ -137,64 +145,60 @@ func (s *AnalyticsService) ExecuteQuery(orgID string, req domain.SQLQueryRequest
 			if err == nil {
 				return sfRes, nil
 			}
-			log.Printf("⚠️ Snowflake query failed or not configured, falling back to DuckDB: %v", err)
+			log.Printf("⚠️ Snowflake query also failed: %v", err)
 		}
 	}
 
-	datasets, err := s.repo.GetDatasetsForAnalytics(orgID, req.DatasetID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch dataset for query: %w", err)
-	}
-	
 	if len(datasets) == 0 {
-		return nil, fmt.Errorf("no dataset found")
+		return nil, fmt.Errorf("no dataset found to query")
 	}
-	
-	// Assume the first dataset is the target
-	dataset := datasets[0]
-	objectName := dataset.StoragePath // Assuming this contains the MinIO object name
-	if objectName == "" {
-		// Fallback for mocked data
+
+	if datasets[0].StoragePath == "" {
 		return &domain.SQLQueryResponse{
 			Columns: []domain.SQLQueryColumn{{Name: "error", DataType: "STRING"}},
-			Rows:    []map[string]interface{}{{"error": "Dataset has no physical storage path in MinIO yet"}},
+			Rows:    []map[string]interface{}{{"error": "Dataset has no physical storage path in Lakehouse yet"}},
 		}, nil
 	}
 
+	return s.executeDuckDBQuery(datasets[0].StoragePath, req.Query)
+}
+
+func (s *AnalyticsService) executeDuckDBQuery(objectName, query string) (*domain.SQLQueryResponse, error) {
 	// Prepare payload for Python Data Engine
 	payload := map[string]interface{}{
-		"query": req.Query,
-		"bucket": "raw-data",
+		"query":       query,
+		"bucket":      "raw-data",
 		"object_name": objectName,
 	}
-	
+
 	payloadBytes, _ := json.Marshal(payload)
-	
+
 	dataEngineURL := os.Getenv("DATA_ENGINE_URL")
 	if dataEngineURL == "" {
 		dataEngineURL = "http://localhost:8001"
 	}
-	
+
 	httpResp, err := http.Post(fmt.Sprintf("%s/api/v1/query", dataEngineURL), "application/json", bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to reach python data engine: %w", err)
 	}
 	defer httpResp.Body.Close()
-	
+
 	if httpResp.StatusCode != 200 {
-		return nil, fmt.Errorf("data engine returned status %d", httpResp.StatusCode)
+		bodyBytes, _ := io.ReadAll(httpResp.Body)
+		return nil, fmt.Errorf("data engine query failed (status %d): %s", httpResp.StatusCode, string(bodyBytes))
 	}
-	
+
 	var result struct {
 		Records         []map[string]interface{} `json:"records"`
 		Count           int                      `json:"count"`
 		ExecutionTimeMs float64                  `json:"execution_time_ms"`
 	}
-	
+
 	if err := json.NewDecoder(httpResp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to parse data engine response: %w", err)
 	}
-	
+
 	// Extract columns
 	var columns []domain.SQLQueryColumn
 	if len(result.Records) > 0 {
@@ -205,14 +209,14 @@ func (s *AnalyticsService) ExecuteQuery(orgID string, req domain.SQLQueryRequest
 			})
 		}
 	}
-	
+
 	res := domain.SQLQueryResponse{
 		Columns:         columns,
 		Rows:            result.Records,
 		TotalRows:       int64(result.Count),
 		ExecutionTimeMs: result.ExecutionTimeMs,
 	}
-	
+
 	return &res, nil
 }
 
@@ -282,14 +286,27 @@ func (s *AnalyticsService) TriggerSnowflakeSync(orgID, userID, datasetID, tableN
 		return nil, fmt.Errorf("snowflake client not initialized")
 	}
 
-	query := "SELECT * FROM clinical_encounters"
-	if tableName != "" {
-		query = fmt.Sprintf("SELECT * FROM %s", tableName)
-	}
-
 	sfCfg, err := s.repo.GetSnowflakeConfig(orgID)
 	if err != nil || sfCfg == nil || !sfCfg.IsConnected {
 		return nil, fmt.Errorf("snowflake not configured for organization")
+	}
+
+	targetTable := strings.TrimSpace(tableName)
+	if targetTable == "" {
+		tables, err := s.sf.GetTables(sfCfg.Database, sfCfg.Schema)
+		if err == nil && len(tables) > 0 {
+			if n, ok := tables[0]["name"].(string); ok && n != "" {
+				targetTable = n
+			}
+		}
+	}
+	if targetTable == "" {
+		return nil, fmt.Errorf("no table specified and no tables found in Snowflake schema %s.%s", sfCfg.Database, sfCfg.Schema)
+	}
+
+	query := fmt.Sprintf("SELECT * FROM %s", targetTable)
+	if !strings.Contains(targetTable, ".") && !strings.HasPrefix(targetTable, "\"") {
+		query = fmt.Sprintf("SELECT * FROM %s.%s.%s", sfCfg.Database, sfCfg.Schema, targetTable)
 	}
 
 	res, err := s.sf.ExecuteTenantQuery(sfCfg.Warehouse, sfCfg.Database, sfCfg.Schema, query)
@@ -616,7 +633,7 @@ func (s *AnalyticsService) getSnowflakeOverview(orgID string, filter domain.Anal
 
 	if len(errs) > 0 {
 		log.Printf("⚠️ Snowflake queries failed, falling back to DuckDB. Error: %v", errs[0])
-		return nil, fmt.Errorf("snowflake queries failed: %v", errs[0])
+		return s.getDuckDBOverview(orgID, filter, datasets)
 	}
 
 	resp := s.engine.FormatDuckDBOverview(datasets, filter, pyResp)

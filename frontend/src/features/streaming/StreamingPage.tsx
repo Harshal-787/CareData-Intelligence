@@ -713,7 +713,7 @@ export const StreamingPage: React.FC = () => {
               <button
                 onClick={handleCustomIngest}
                 disabled={isSimulating}
-                className="px-4 py-2 text-xs font-semibold rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500 flex items-center gap-1.5 disabled:opacity-50"
+                className="btn-primary"
               >
                 <Send className="h-3.5 w-3.5" />
                 <span>Inject Stream Message</span>

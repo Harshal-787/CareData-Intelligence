@@ -209,19 +209,19 @@ export const DatasetsPage: React.FC = () => {
           {/* Snowflake Import Button */}
           <button
             onClick={() => setIsSnowflakeModalOpen(true)}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-200 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-indigo-600"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition active:scale-[0.98]"
           >
-            <Database className="size-3.5" />
+            <Database className="size-3.5 text-cyan-400" />
             <span>Extract from Snowflake</span>
           </button>
 
           {/* Upload Button */}
           <button
             onClick={() => setIsUploadOpen(true)}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-cyan-200 transition hover:-translate-y-0.5 hover:from-cyan-600 hover:to-blue-600"
+            className="btn-primary"
           >
             <UploadCloud className="size-3.5" />
-            <span>Upload dataset</span>
+            <span>Upload Dataset</span>
           </button>
         </div>
       </div>
@@ -363,7 +363,7 @@ export const DatasetsPage: React.FC = () => {
             <div className="flex items-center justify-center space-x-3 pt-2">
               <button
                 onClick={() => setIsUploadOpen(true)}
-                className="rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 px-4 py-2 text-xs font-bold text-white shadow-md shadow-cyan-200 transition hover:-translate-y-0.5"
+                className="btn-primary"
               >
                 Upload file
               </button>
