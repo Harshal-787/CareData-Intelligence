@@ -3,7 +3,6 @@ import {
   Sparkles,
   Database,
   Activity,
-  Users,
   ShieldCheck,
   Check,
   Copy,
@@ -11,7 +10,6 @@ import {
   FileText,
   AlertTriangle,
   TrendingUp,
-  Clock,
   Building2,
   CheckCircle2,
   Stethoscope
