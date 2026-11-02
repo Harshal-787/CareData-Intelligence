@@ -196,6 +196,16 @@ export const SuperAdminLayout: React.FC = () => {
               API Docs <span className="text-xs">↗</span>
             </a>
 
+            {/* Mobile Search Trigger */}
+            <button
+              type="button"
+              onClick={() => setSearchModalOpen(true)}
+              className="flex md:hidden p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 rounded-xl transition-colors"
+              aria-label="Open search command palette"
+            >
+              <Search className="size-4 text-slate-500" />
+            </button>
+
             {/* Expandable Enterprise Search Trigger */}
             <button
               type="button"
@@ -225,7 +235,7 @@ export const SuperAdminLayout: React.FC = () => {
           <div className="absolute bottom-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent pointer-events-none" />
         </header>
 
-        <main className="flex-1 p-6 sm:p-8 lg:p-10 w-full overflow-x-hidden">
+        <main className="flex-1 p-3.5 sm:p-6 lg:p-8 w-full max-w-full overflow-x-hidden">
           <Outlet />
         </main>
       </div>

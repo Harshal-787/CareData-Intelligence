@@ -1,0 +1,13 @@
+bin
+main
+api_server
+api
+storage
+*.log
+.git
+.github
+.vscode
+.env
+caredata.db
+.DS_Store
+*.swp

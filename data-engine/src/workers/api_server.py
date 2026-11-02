@@ -26,6 +26,14 @@ logger = logging.getLogger("APIServer")
 
 app = FastAPI(title="CareData Python Data Engine API")
 
+@app.get("/health")
+def health_check():
+    return {
+        "status": "healthy",
+        "service": "CareData Python Data Engine",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
 class QueryRequest(BaseModel):
     query: str
     bucket: str = "raw-data"

@@ -154,7 +154,7 @@ export const DatasetsPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* 1-Click Sample Dataset Dropdown */}
           <div className="relative">
             <button
@@ -314,13 +314,13 @@ export const DatasetsPage: React.FC = () => {
           />
         </form>
 
-        <div className="flex items-center space-x-3 w-full sm:w-auto">
-          <div className="flex items-center space-x-2 relative">
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+          <div className="flex items-center space-x-2 relative flex-1 sm:flex-initial">
             <Filter className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="appearance-none rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-8 text-xs font-semibold text-slate-700 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition"
+              className="appearance-none w-full sm:w-auto rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-8 text-xs font-semibold text-slate-700 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition"
             >
               <option value="">All statuses</option>
               <option value="READY">Ready</option>
@@ -334,7 +334,7 @@ export const DatasetsPage: React.FC = () => {
           <button
             onClick={loadData}
             disabled={loading}
-            className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition disabled:opacity-50"
+            className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition disabled:opacity-50 shrink-0"
             title="Refresh datasets list"
           >
             <RefreshCw className={cn("size-4", loading && "animate-spin")} />
@@ -360,7 +360,7 @@ export const DatasetsPage: React.FC = () => {
                 Upload your first healthcare file (CSV, JSON, Parquet) or generate an instant clinical benchmark dataset.
               </p>
             </div>
-            <div className="flex items-center justify-center space-x-3 pt-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 pt-2">
               <button
                 onClick={() => setIsUploadOpen(true)}
                 className="btn-primary"

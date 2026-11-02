@@ -533,47 +533,47 @@ export const MLPredictionsPage: React.FC = () => {
       </div>
 
       {/* Main Subsections Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-1">
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-1 overflow-x-auto">
         <button
           onClick={() => setActiveTab('anomalies')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition ${
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 text-xs font-semibold rounded-t-xl transition shrink-0 whitespace-nowrap ${
             activeTab === 'anomalies'
               ? 'bg-slate-50 text-cyan-600 border-b-2 border-cyan-500 shadow'
               : 'text-slate-400 hover:text-slate-700'
           }`}
         >
-          <AlertTriangle className="w-4 h-4" />
+          <AlertTriangle className="w-4 h-4 shrink-0" />
           Clinical & Billing Anomalies
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500/20 text-rose-300 font-mono font-bold">
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500/20 text-rose-500 font-mono font-bold">
             {anomaliesTotal}
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('risk_stratification')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition ${
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 text-xs font-semibold rounded-t-xl transition shrink-0 whitespace-nowrap ${
             activeTab === 'risk_stratification'
               ? 'bg-slate-50 text-cyan-600 border-b-2 border-cyan-500 shadow'
               : 'text-slate-400 hover:text-slate-700'
           }`}
         >
-          <HeartPulse className="w-4 h-4" />
-          Patient Risk Stratification Leaderboard
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-300 font-mono font-bold">
+          <HeartPulse className="w-4 h-4 shrink-0" />
+          Patient Risk Stratification
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-600 font-mono font-bold">
             {riskTotal}
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('models')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition ${
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 text-xs font-semibold rounded-t-xl transition shrink-0 whitespace-nowrap ${
             activeTab === 'models'
               ? 'bg-slate-50 text-cyan-600 border-b-2 border-cyan-500 shadow'
               : 'text-slate-400 hover:text-slate-700'
           }`}
         >
-          <Cpu className="w-4 h-4" />
-          Model Architecture & Training History
+          <Cpu className="w-4 h-4 shrink-0" />
+          Model Architecture & History
         </button>
       </div>
 

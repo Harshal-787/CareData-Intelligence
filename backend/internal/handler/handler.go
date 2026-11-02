@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"os"
 	"runtime"
 	"time"
 
@@ -74,7 +75,11 @@ func (h *Handler) SystemHealth(w http.ResponseWriter, r *http.Request) {
 	// 2. Redis Event & Queue Probe
 	redisStatus := "ONLINE"
 	startRedis := time.Now()
-	connRedis, err := net.DialTimeout("tcp", "localhost:6379", 600*time.Millisecond)
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
+	connRedis, err := net.DialTimeout("tcp", redisAddr, 600*time.Millisecond)
 	if err != nil {
 		redisStatus = "DEGRADED"
 	} else {
@@ -89,7 +94,15 @@ func (h *Handler) SystemHealth(w http.ResponseWriter, r *http.Request) {
 	minioStatus := "ONLINE"
 	startMinio := time.Now()
 	clientMinio := &http.Client{Timeout: 800 * time.Millisecond}
-	respMinio, err := clientMinio.Get("http://localhost:9000/minio/health/live")
+	minioEndpoint := os.Getenv("MINIO_ENDPOINT")
+	if minioEndpoint == "" {
+		minioEndpoint = "localhost:9000"
+	}
+	minioURL := "http://" + minioEndpoint + "/minio/health/live"
+	if os.Getenv("MINIO_USE_SSL") == "true" {
+		minioURL = "https://" + minioEndpoint + "/minio/health/live"
+	}
+	respMinio, err := clientMinio.Get(minioURL)
 	if err != nil || respMinio.StatusCode != http.StatusOK {
 		minioStatus = "DEGRADED"
 	} else {
@@ -104,7 +117,11 @@ func (h *Handler) SystemHealth(w http.ResponseWriter, r *http.Request) {
 	engineStatus := "ONLINE"
 	startEngine := time.Now()
 	clientEngine := &http.Client{Timeout: 800 * time.Millisecond}
-	respEngine, err := clientEngine.Get("http://localhost:8001/docs")
+	engineURL := os.Getenv("DATA_ENGINE_URL")
+	if engineURL == "" {
+		engineURL = "http://localhost:8001"
+	}
+	respEngine, err := clientEngine.Get(engineURL + "/docs")
 	if err != nil || respEngine.StatusCode != http.StatusOK {
 		engineStatus = "DEGRADED"
 	} else {

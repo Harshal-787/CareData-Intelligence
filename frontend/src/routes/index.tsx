@@ -25,12 +25,14 @@ import { OrganizationsDashboard } from "../features/superadmin/OrganizationsDash
 import { SuperAdminLayout } from "../layouts/SuperAdminLayout";
 import { SystemHealth, BillingSubscriptions, GlobalAuditLogs, PlatformSettings } from "../features/superadmin/Placeholders";
 import { SuperAdminProfile } from "../features/superadmin/SuperAdminProfile";
+import { LandingPage } from "../features/landing/LandingPage";
 
 export const AppRoutes: React.FC = () => {
   return (
     <Routes>
-      {/* Root redirects to login */}
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      {/* Public Landing Page */}
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/landing" element={<LandingPage />} />
 
       {/* Public Auth Routes */}
       <Route element={<AuthLayout />}>

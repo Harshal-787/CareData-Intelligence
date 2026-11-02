@@ -25,6 +25,9 @@
     --ring: 189 94% 43%;
     --radius: 0.75rem;
   }
+  html {
+    scroll-behavior: smooth;
+  }
   body {
     @apply bg-[#f8f8fc] text-slate-900 font-sans antialiased selection:bg-cyan-100 selection:text-cyan-900;
   }

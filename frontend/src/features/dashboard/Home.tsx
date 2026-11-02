@@ -229,7 +229,7 @@ export const DashboardHome: React.FC = () => {
     <div className="mx-auto max-w-[1560px] space-y-7 pb-16 animate-in fade-in duration-300">
       
       {/* Enterprise Workspace Header */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-6 sm:p-7 shadow-xs">
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-7 shadow-xs">
         {/* Meta Context Ribbon */}
         <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 text-xs">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -267,7 +267,7 @@ export const DashboardHome: React.FC = () => {
           </div>
 
           {/* Action Button Group */}
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
             <button
               onClick={fetchDashboardData}
               disabled={refreshing}
@@ -297,7 +297,7 @@ export const DashboardHome: React.FC = () => {
         </div>
 
         {/* Live Clinical Pipeline Telemetry Strip */}
-        <div className="mt-5 pt-4 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div className="mt-5 pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
           <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Lakehouse Cohort</p>
             <p className="font-bold text-slate-800 mt-0.5">{totalEncounters.toLocaleString()} Inpatient Records</p>

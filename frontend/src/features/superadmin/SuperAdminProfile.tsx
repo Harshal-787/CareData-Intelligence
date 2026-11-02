@@ -24,13 +24,12 @@ export const SuperAdminProfile: React.FC = () => {
     setSaveStatus("SAVING");
     setErrorMessage("");
     try {
-      // Assuming api client is available or we use fetch. Let's use fetch if api is missing. But we know it's there.
-      // I will dynamically use window.fetch if needed or just api. Let's assume api exists.
-      const res = await fetch('http://localhost:8080/api/v1/users/me/profile', {
+      const token = localStorage.getItem('caredata_access_token') || localStorage.getItem('token');
+      const res = await fetch('/api/v1/users/me/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}` // assuming token is here
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(profile)
       });
@@ -53,11 +52,12 @@ export const SuperAdminProfile: React.FC = () => {
     setSaveStatus("SAVING");
     setErrorMessage("");
     try {
-      const res = await fetch('http://localhost:8080/api/v1/users/me/password', {
+      const token = localStorage.getItem('caredata_access_token') || localStorage.getItem('token');
+      const res = await fetch('/api/v1/users/me/password', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ newPassword: security.newPassword })
       });

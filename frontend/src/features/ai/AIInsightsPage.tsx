@@ -293,40 +293,40 @@ export const AIInsightsPage: React.FC = () => {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-1">
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-1 overflow-x-auto">
         <button
           onClick={() => setActiveView('chat')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition ${
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 text-xs font-semibold rounded-t-xl transition shrink-0 whitespace-nowrap ${
             activeView === 'chat'
               ? 'bg-slate-50 text-cyan-600 border-b-2 border-cyan-500 shadow'
               : 'text-slate-400 hover:text-slate-700'
           }`}
         >
-          <Bot className="w-4 h-4" />
+          <Bot className="w-4 h-4 shrink-0" />
           Conversational SQL Assistant
         </button>
 
         <button
           onClick={() => setActiveView('narrative')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition ${
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 text-xs font-semibold rounded-t-xl transition shrink-0 whitespace-nowrap ${
             activeView === 'narrative'
               ? 'bg-slate-50 text-cyan-600 border-b-2 border-cyan-500 shadow'
               : 'text-slate-400 hover:text-slate-700'
           }`}
         >
-          <Activity className="w-4 h-4" />
+          <Activity className="w-4 h-4 shrink-0" />
           Executive Narrative Insights
         </button>
 
         <button
           onClick={() => setActiveView('reports')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition ${
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 text-xs font-semibold rounded-t-xl transition shrink-0 whitespace-nowrap ${
             activeView === 'reports'
               ? 'bg-slate-50 text-cyan-600 border-b-2 border-cyan-500 shadow'
               : 'text-slate-400 hover:text-slate-700'
           }`}
         >
-          <FileText className="w-4 h-4" />
+          <FileText className="w-4 h-4 shrink-0" />
           Clinical Reports Archive ({reports.length})
         </button>
       </div>

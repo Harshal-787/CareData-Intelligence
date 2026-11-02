@@ -61,7 +61,7 @@ export const LandingNavbar: React.FC = () => {
         <div className="flex items-center justify-between">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3 transition-transform hover:scale-105 active:scale-95">
-            <BrandLogo />
+            <BrandLogo theme="dark" />
           </Link>
 
           {/* Desktop Navigation Links */}

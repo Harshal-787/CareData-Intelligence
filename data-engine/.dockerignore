@@ -1,0 +1,16 @@
+venv
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+mlruns.db
+mlruns/
+.pytest_cache
+.git
+.github
+.vscode
+.env
+.DS_Store
+*.swp

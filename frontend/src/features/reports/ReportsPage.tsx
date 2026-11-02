@@ -123,7 +123,7 @@ export const ReportsPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: Reports Catalog (4 cols) */}
         <div className="lg:col-span-4 space-y-4">
-          <div className="p-4 rounded-2xl bg-white border border-slate-200 flex flex-col h-[700px]">
+          <div className="p-4 rounded-2xl bg-white border border-slate-200 flex flex-col h-[340px] lg:h-[700px]">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
                 <FileText className="w-4 h-4 text-cyan-600" />

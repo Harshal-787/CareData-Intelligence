@@ -43,6 +43,9 @@ Thumbs.db
 
 # Go artifacts & binaries
 backend/api
+backend/bin/
+backend/main
+backend/api_server
 *.exe
 *.exe~
 *.dll

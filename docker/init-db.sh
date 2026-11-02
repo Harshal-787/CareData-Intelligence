@@ -1,18 +1,13 @@
 #!/bin/bash
 set -e
 
-echo "Running Database Migrations..."
+echo "PostgreSQL initialization script executing..."
 
-# Wait for Postgres to be ready
-until PGPASSWORD=$POSTGRES_PASSWORD psql -h "postgres" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c '\q'; do
-  >&2 echo "Postgres is unavailable - sleeping"
-  sleep 1
-done
+# Ensure default database extensions and parameters if needed
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+EOSQL
 
->&2 echo "Postgres is up - executing migrations"
+echo "CareData PostgreSQL initialization complete. Go backend will auto-apply schema migrations on boot."
 
-# Note: The Go application backend currently handles auto-migrations upon startup via db.migrate()
-# This script serves as an enterprise entrypoint placeholder for Flyway/Liquibase/golang-migrate in the future.
-echo "Backend service will auto-apply schema.sql migrations upon connection."
-
-echo "Database initialization complete."

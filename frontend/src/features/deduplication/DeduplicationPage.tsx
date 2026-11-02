@@ -411,7 +411,7 @@ export const DeduplicationPage: React.FC = () => {
       </div>
 
       {/* 2. Key Metrics Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         {/* Total Candidates */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 backdrop-blur-sm relative overflow-hidden group hover:border-slate-200 transition-all">
           <div className="flex justify-between items-center text-slate-400 text-xs font-medium uppercase tracking-wider">
@@ -488,8 +488,8 @@ export const DeduplicationPage: React.FC = () => {
       </div>
 
       {/* 3. Main Tabs Navigation */}
-      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-2 overflow-x-auto">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setActiveTab("queue")}
             className={`flex items-center gap-2.5 px-5 py-2.5 rounded-2xl font-medium text-sm transition-all cursor-pointer ${

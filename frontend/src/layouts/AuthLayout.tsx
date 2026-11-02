@@ -76,10 +76,10 @@ export const AuthLayout: React.FC = () => {
         </section>
         
         {/* Right Side: Form Panel */}
-        <section className="flex w-full lg:w-1/2 items-center justify-center p-6 sm:p-12 lg:p-24 bg-white">
+        <section className="flex w-full lg:w-1/2 items-center justify-center p-4 sm:p-8 lg:p-20 bg-white">
           <div className="w-full max-w-md flex flex-col justify-center">
-            <div className="mb-8 flex items-center justify-center lg:justify-start">
-              <BrandLogo collapsed={false} theme="light" size="xl" />
+            <div className="mb-6 sm:mb-8 flex items-center justify-center lg:justify-start">
+              <BrandLogo collapsed={false} theme="light" size="xl" imgClassName="h-14 sm:h-18 lg:h-22 w-auto" />
             </div>
             
             <Outlet />

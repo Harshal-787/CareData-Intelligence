@@ -317,15 +317,15 @@ export const QualityPage: React.FC = () => {
               />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
                   Clinical Data Quality & Profiling Suite
                 </h1>
                 <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-cyan-100 text-cyan-700 border border-cyan-200">
                   Phase 3
                 </span>
               </div>
-              <p className="text-sm text-slate-400 mt-0.5">
+              <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
                 Automated dataset profiling, statistical histograms, and
                 healthcare clinical validation rules.
               </p>
@@ -335,12 +335,12 @@ export const QualityPage: React.FC = () => {
 
         {/* Dataset Switcher & Audit Action */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-2xl px-3 py-1.5">
-            <Database className="h-4 w-4 text-cyan-600" />
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-2xl px-3 py-1.5 w-full sm:w-auto">
+            <Database className="h-4 w-4 text-cyan-600 shrink-0" />
             <select
               value={selectedDatasetId}
               onChange={(e) => setSelectedDatasetId(e.target.value)}
-              className="bg-transparent text-sm font-medium text-slate-700 focus:outline-none cursor-pointer pr-2"
+              className="bg-transparent text-sm font-medium text-slate-700 focus:outline-none cursor-pointer pr-2 w-full sm:w-auto truncate"
               disabled={datasets.length === 0}
             >
               {datasets.map((d) => (
@@ -358,7 +358,7 @@ export const QualityPage: React.FC = () => {
           <button
             onClick={handleRunAudit}
             disabled={auditing || !selectedDatasetId}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-cyan-600 hover:bg-cyan-700 text-white shadow-sm shadow-cyan-600/20 transition active:scale-[0.98] disabled:opacity-50"
+            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-cyan-600 hover:bg-cyan-700 text-white shadow-sm shadow-cyan-600/20 transition active:scale-[0.98] disabled:opacity-50 w-full sm:w-auto"
           >
             <Play
               className={`h-3.5 w-3.5 ${auditing ? "animate-spin" : "fill-white"}`}
@@ -369,13 +369,13 @@ export const QualityPage: React.FC = () => {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center justify-between border-b border-slate-200">
-        <div className="flex space-x-1">
+      <div className="flex items-center justify-between border-b border-slate-200 overflow-x-auto">
+        <div className="flex space-x-1 shrink-0">
           {[
             { id: "overview", label: "Quality Scorecards", icon: Activity },
             {
               id: "profiler",
-              label: "Column Profiler & Distributions",
+              label: "Column Profiler",
               icon: BarChart2,
             },
             { id: "rules", label: "Clinical Rule Builder", icon: Sliders },
@@ -391,13 +391,13 @@ export const QualityPage: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition ${
+                className={`flex items-center gap-2 px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 transition shrink-0 whitespace-nowrap ${
                   isActive
                     ? "border-cyan-400 text-cyan-600 bg-cyan-50/50"
                     : "border-transparent text-slate-400 hover:text-slate-700 hover:border-slate-200"
                 }`}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-4 w-4 shrink-0" />
                 {tab.label}
               </button>
             );
